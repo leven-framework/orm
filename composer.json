@@ -1,0 +1,12 @@
+{
+  "name": "leven-framework/orm",
+  "type": "library",
+  "require": {
+    "leven-framework/dba-common": "@dev"
+  },
+  "autoload": {
+    "psr-4": {
+      "Leven\\ORM\\": "src/"
+    }
+  }
+}
