@@ -16,7 +16,7 @@ abstract class Repository
 
     public function __construct(
         private readonly DatabaseAdapterInterface $db,
-        private readonly RepositoryConfig $config
+        private readonly RepositoryConfig $config = new RepositoryConfig
     )
     {
     }
