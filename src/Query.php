@@ -46,6 +46,11 @@ final class Query
 
     // RESULT //
 
+    public function count(): int
+    {
+        return $this->getFromRepoDB(true)->rows[0]['COUNT(*)'];
+    }
+
     public function get(): Collection
     {
         $entities = [];
@@ -87,12 +92,12 @@ final class Query
         return $newConditions;
     }
 
-    private function getFromRepoDB(): DatabaseAdapterResponse
+    private function getFromRepoDB(bool $count = false): DatabaseAdapterResponse
     {
         try {
             return $this->repo->getDb()->get(
                 table: $this->getEntityConfig()->table,
-                columns: $this->getEntityConfig()->propsColumn,
+                columns: !$count ? $this->getEntityConfig()->propsColumn : 'COUNT(*)',
                 conditions: $this->conditions,
                 options: $this->generateOptions()
             );
