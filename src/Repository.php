@@ -99,7 +99,8 @@ abstract class Repository
 
         $constructorProps = [];
         foreach ($entityConfig->constructorProps as $propName) {
-            $constructorProps[$propName] = $props[$propName];
+            // if for some reason the prop isn't in database, assume it's nullable
+            $constructorProps[$propName] = $props[$propName] ?? null;
             unset($props[$propName]);
         }
 
