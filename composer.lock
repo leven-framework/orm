@@ -1,0 +1,53 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "3e0f023e3ce93652ea510c0816c58769",
+    "packages": [
+        {
+            "name": "leven-framework/dba-common",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/leven-framework/dba-common.git",
+                "reference": "a15997ac952dc70dfa8a504b56272cc1917429c6"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/leven-framework/dba-common/zipball/a15997ac952dc70dfa8a504b56272cc1917429c6",
+                "reference": "a15997ac952dc70dfa8a504b56272cc1917429c6",
+                "shasum": ""
+            },
+            "suggest": {
+                "leven-framework/dba-mock": "Mock a database using e.g. a local file",
+                "leven-framework/dba-mysql": "PDO MySQL adapter"
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Leven\\DBA\\Common\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "support": {
+                "issues": "https://github.com/leven-framework/dba-common/issues",
+                "source": "https://github.com/leven-framework/dba-common/tree/master"
+            },
+            "time": "2022-02-19T13:27:33+00:00"
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": {
+        "leven-framework/dba-common": 20
+    },
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": [],
+    "platform-dev": [],
+    "plugin-api-version": "2.2.0"
+}

@@ -3,7 +3,6 @@
 use Leven\ORM\Exceptions\{EntityNotFoundException, PropertyValidationException, RepositoryDatabaseException};
 use Leven\DBA\Common\DatabaseAdapterInterface;
 use Leven\DBA\Common\Exception\{DatabaseAdapterException, EmptyResultException};
-use DateTime;
 use Exception;
 
 // TODO:
@@ -11,6 +10,9 @@ use Exception;
 
 abstract class Repository
 {
+
+    use RepositoryCastersTrait;
+    use RepositoryGeneratorsTrait;
 
     private array $cache;
 
@@ -320,39 +322,6 @@ abstract class Repository
         } catch (DatabaseAdapterException $e) {
             throw new RepositoryDatabaseException(previous: $e);
         }
-    }
-
-    private function dateTimeNow(string $entityClass): DateTime
-    {
-        return new DateTime();
-    }
-
-    private function castDateTimeToTimestamp(DateTime $input): int
-    {
-        return $input->getTimestamp();
-    }
-
-    private function castTimestampToDateTime(int $input): DateTime
-    {
-        return DateTime::createFromFormat('U', $input);
-    }
-
-    private function castCollectionToPrimariesString(Collection $collection, string $entityClass): string
-    {
-        $primaryProp = $this->config->for($entityClass)->primaryProp;
-        return implode(',', $collection->arrayOfProps($primaryProp));
-
-    }
-
-    private function castPrimariesStringToCollection(string $primaries, string $entityClass): Collection
-    {
-        $collection = new Collection($entityClass);
-
-        $primaries = !empty($primaries) ? explode(',', $primaries) : [];
-        foreach ($primaries as $primary)
-            $collection->add($this->get($entityClass, $primary));
-
-        return $collection;
     }
 
 }
