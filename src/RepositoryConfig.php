@@ -1,7 +1,7 @@
 <?php namespace Leven\ORM;
 
 use Leven\ORM\Attributes\{EntityConfig, PropConfig, ValidationConfig};
-use ReflectionClass, ReflectionException, ReflectionProperty;
+use ReflectionClass, ReflectionException, ReflectionProperty, ReflectionNamedType;
 use Exception;
 
 class RepositoryConfig
@@ -59,11 +59,16 @@ class RepositoryConfig
 
             $entityConfig->addProp($propConfig);
 
-            $propType = $prop->getType()->getName();
-            if(is_subclass_of($propType, Entity::class)) {
-                $propConfig->parent = $propType;
+            $propType = $prop->getType();
+            if(!$propType instanceof ReflectionNamedType || $propType->isBuiltin()) continue;
+
+            $propTypeName = $propType->getName();
+            $propConfig->typeClass = $propTypeName;
+
+            if(is_subclass_of($propTypeName, Entity::class)) {
+                $propConfig->parent = true;
                 $propConfig->index = true;
-                $entityConfig->parentColumns[$propType] = $propConfig->column;
+                $entityConfig->parentColumns[$propTypeName] = $propConfig->column;
             }
         }
 

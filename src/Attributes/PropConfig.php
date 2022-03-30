@@ -7,7 +7,8 @@ class PropConfig
 {
 
     public string $name;
-    public string $parent;
+    public bool $parent;
+    public string $typeClass;
     public ValidationConfig $validation;
 
     public function __construct(
@@ -16,7 +17,8 @@ class PropConfig
         public bool $primary = false,
         public ?string $converter = null,
         public bool $serialize = false,
-        public bool $jsonize = false
+        public bool $jsonize = false,
+        public array $custom = [],
     )
     {
         if($this->primary) $this->index = true;

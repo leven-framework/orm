@@ -74,12 +74,12 @@ abstract class Repository
             $propName = $entityConfig->columns[$column];
             $propConfig = $entityConfig->getProp($propName);
 
-            if (isset($propConfig->parent))
-                $props[$propName] = $this->get($propConfig->parent, $value);
+            if (!empty($propConfig->parent))
+                $props[$propName] = $this->get($propConfig->typeClass, $value);
 
             else if (isset($propConfig->converter)) {
                 /** @var BaseConverter $converter */
-                $converter = new $propConfig->converter($this);
+                $converter = new $propConfig->converter($this, $entityClass, $propName);
                 $props[$propName] = $converter->convertForPhp($value);
             }
 
@@ -192,12 +192,12 @@ abstract class Repository
             //$validator = new Validator($propConfig->validation);
             //$validator($entity->$prop);
 
-            if (isset($propConfig->parent))
-                $value = $entity->$prop->{$this->config->for($propConfig->parent)->primaryProp};
+            if (!empty($propConfig->parent))
+                $value = $entity->$prop->{$this->config->for($propConfig->typeClass)->primaryProp};
 
             else if (isset($propConfig->converter)) {
                 /** @var BaseConverter $converter */
-                $converter = new $propConfig->converter($this);
+                $converter = new $propConfig->converter($this, $class, $prop);
                 $value = $converter->convertForDatabase($entity->$prop);
             }
 
