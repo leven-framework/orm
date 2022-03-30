@@ -14,11 +14,7 @@ class PropConfig
         public bool $index = false,
         public ?string $column = null,
         public bool $primary = false,
-        public ?string $createMethod = null,
-        public ?string $updateMethod = null,
-        public ?string $loadCaster = null,
-        public ?string $saveCaster = null,
-        public array $castParams = [],
+        public ?string $converter = null,
         public bool $serialize = false,
         public bool $jsonize = false
     )

@@ -12,12 +12,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/leven-framework/dba-common.git",
-                "reference": "a15997ac952dc70dfa8a504b56272cc1917429c6"
+                "reference": "125a2199dbb2838de577e480d8cc8b0c35492ea7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/leven-framework/dba-common/zipball/a15997ac952dc70dfa8a504b56272cc1917429c6",
-                "reference": "a15997ac952dc70dfa8a504b56272cc1917429c6",
+                "url": "https://api.github.com/repos/leven-framework/dba-common/zipball/125a2199dbb2838de577e480d8cc8b0c35492ea7",
+                "reference": "125a2199dbb2838de577e480d8cc8b0c35492ea7",
                 "shasum": ""
             },
             "suggest": {
@@ -36,7 +36,7 @@
                 "issues": "https://github.com/leven-framework/dba-common/issues",
                 "source": "https://github.com/leven-framework/dba-common/tree/master"
             },
-            "time": "2022-02-19T13:27:33+00:00"
+            "time": "2022-03-30T12:20:00+00:00"
         }
     ],
     "packages-dev": [],

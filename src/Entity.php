@@ -12,15 +12,22 @@ abstract class Entity
         throw new Exception("property $name does not exist");
     }
 
-
-    /*
-    public function children(Repository $repo, array|string $conditions = [], array $additional = [], string $prop = 'parent'): EntitySet|Entity // TODO FIGURE A WAY TO DO THIS
+    /**
+     * empty but can be extended
+     * will be called by repository when the entity gets stored after creation
+     * @return void
+     */
+    public function onCreate(): void
     {
-        return $repo->find(
-            [$prop => $this->uid] + $conditions,
-            $additional
-        );
     }
 
-    */
+    /**
+     * empty but can be extended
+     * will be called by repository each time the entity gets updated
+     * @return void
+     */
+    public function onUpdate(): void
+    {
+    }
+
 }

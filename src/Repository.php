@@ -1,6 +1,7 @@
 <?php namespace Leven\ORM;
 
 use Leven\ORM\Exceptions\{EntityNotFoundException, PropertyValidationException, RepositoryDatabaseException};
+use Leven\ORM\{Attributes\PropConfig, Converters\BaseConverter};
 use Leven\DBA\Common\DatabaseAdapterInterface;
 use Leven\DBA\Common\Exception\{DatabaseAdapterException, EmptyResultException};
 use Exception;
@@ -10,9 +11,6 @@ use Exception;
 
 abstract class Repository
 {
-
-    use RepositoryCastersTrait;
-    use RepositoryGeneratorsTrait;
 
     private array $cache;
 
@@ -78,8 +76,12 @@ abstract class Repository
 
             if (isset($propConfig->parent))
                 $props[$propName] = $this->get($propConfig->parent, $value);
-            else if (isset($propConfig->loadCaster))
-                $props[$propName] = $this->{$propConfig->loadCaster}($value, ...$propConfig->castParams);
+
+            else if (isset($propConfig->converter)) {
+                /** @var BaseConverter $converter */
+                $converter = new $propConfig->converter($this);
+                $props[$propName] = $converter->convertForPhp($value);
+            }
 
             else if ($propConfig->serialize){    if(!empty($value)) $props[$propName] = unserialize($value); }
             else if ($propConfig->jsonize){      if(!empty($value)) $props[$propName] = json_decode($value); }
@@ -175,25 +177,29 @@ abstract class Repository
         $entityConfig = $this->config->for($class);
         $propsColumn = $entityConfig->propsColumn;
 
+        $entity->onUpdate();
+        $isCreation && $entity->onCreate();
+
         $row = [];
         $row[$propsColumn] = [];
 
         foreach ($entityConfig->getProps() as $prop => $propConfig) {
-            if($isCreation && $propConfig->createMethod)
-                $entity->$prop = $this->{$propConfig->createMethod}($class);
+            /** @var PropConfig $propConfig */
 
-            if($propConfig->updateMethod)
-                $entity->$prop = $this->{$propConfig->updateMethod}($class);
+            if (!isset($entity->$prop)) continue; // TODO check if this makes sense
 
-            if (!isset($entity->$prop)) continue; // TODO check if this is good
-            $validator = new Validator($propConfig->validation); // TODO rethink what exactly should be validated
+            // TODO rethink what exactly should be validated - primitive types only perhaps?
+            //$validator = new Validator($propConfig->validation);
             //$validator($entity->$prop);
 
             if (isset($propConfig->parent))
                 $value = $entity->$prop->{$this->config->for($propConfig->parent)->primaryProp};
 
-            else if (isset($propConfig->saveCaster))
-                $value = $this->{$propConfig->saveCaster}($entity->$prop, ...$propConfig->castParams);
+            else if (isset($propConfig->converter)) {
+                /** @var BaseConverter $converter */
+                $converter = new $propConfig->converter($this);
+                $value = $converter->convertForDatabase($entity->$prop);
+            }
 
             else if ($propConfig->serialize)    $value = serialize($entity->$prop);
             else if ($propConfig->jsonize)      $value = json_encode($entity->$prop);
