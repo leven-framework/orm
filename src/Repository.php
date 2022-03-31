@@ -5,9 +5,7 @@ use Leven\ORM\{Attributes\PropConfig, Converters\BaseConverter};
 use Leven\DBA\Common\DatabaseAdapterInterface;
 use Leven\DBA\Common\Exception\{DatabaseAdapterException, EmptyResultException};
 use Exception;
-
-// TODO:
-// saving multiple entities (and use transactions)
+use Throwable;
 
 abstract class Repository
 {
@@ -74,18 +72,15 @@ abstract class Repository
             $propName = $entityConfig->columns[$column];
             $propConfig = $entityConfig->getProp($propName);
 
-            if (!empty($propConfig->parent))
+            if (!empty($propConfig->parent)) {
                 $props[$propName] = $this->get($propConfig->typeClass, $value);
-
+            }
             else if (isset($propConfig->converter)) {
                 /** @var BaseConverter $converter */
                 $converter = new $propConfig->converter($this, $entityClass, $propName);
                 $props[$propName] = $converter->convertForPhp($value);
             }
-
-            else if ($propConfig->serialize){    if(!empty($value)) $props[$propName] = unserialize($value); }
-            else if ($propConfig->jsonize){      if(!empty($value)) $props[$propName] = json_decode($value); }
-            else                                $props[$propName] = $value;
+            else $props[$propName] = $value;
 
         }
 
@@ -121,30 +116,39 @@ abstract class Repository
      * @throws PropertyValidationException
      * @throws RepositoryDatabaseException
      */
-    public function update(Entity $entity): static
+    public function update(Entity ...$entities): static
     {
-        $class = get_class($entity);
-        $entityConfig = $this->config->for($class);
-        $primaryProp = $entityConfig->primaryProp;
+        if(count($entities) > 1) $this->txnBegin();
 
-        // TODO update props value only if some of the non-indexed props are dirty
+        foreach($entities as $entity) {
+            $class = get_class($entity);
+            $entityConfig = $this->config->for($class);
+            $primaryProp = $entityConfig->primaryProp;
 
-        $row = $this->generateDbRow($entity);
+            // TODO update props value only if some of the non-indexed props are dirty
 
-        try {
-            $this->db->update(
-                table: $entityConfig->table,
-                data: $row,
-                conditions: [
-                    $entityConfig->getPrimaryColumn() => $entity->$primaryProp
-                ],
-                options: ['limit' => 1]
-            );
+            try { $row = $this->generateDbRow($entity); }
+            catch(Throwable $e) {
+                if(count($entities) > 1) $this->txnRollback();
+                throw $e;
+            }
+
+            try {
+                $this->db->update(
+                    table: $entityConfig->table,
+                    data: $row,
+                    conditions: [
+                        $entityConfig->getPrimaryColumn() => $entity->$primaryProp
+                    ],
+                    options: ['limit' => 1]
+                );
+            } catch (Exception $e) {
+                if(count($entities) > 1) $this->txnRollback();
+                throw new RepositoryDatabaseException(previous: $e);
+            }
         }
-        catch(Exception $e){
-            throw new RepositoryDatabaseException(previous: $e);
-        }
 
+        if(count($entities) > 1) $this->txnCommit();
         return $this;
     }
 
@@ -152,19 +156,32 @@ abstract class Repository
      * @throws PropertyValidationException
      * @throws RepositoryDatabaseException
      */
-    public function store(Entity $entity): static
+    public function store(Entity ...$entities): static
     {
-        $class = get_class($entity);
-        $entityConfig = $this->config->for($class);
-        $primaryProp = $entityConfig->primaryProp;
+        if(count($entities) > 1) $this->txnBegin();
 
-        $row = $this->generateDbRow($entity, true);
+        foreach($entities as $entity) {
+            $class = get_class($entity);
+            $entityConfig = $this->config->for($class);
+            $primaryProp = $entityConfig->primaryProp;
 
-        try { $this->db->insert($entityConfig->table, $row); }
-        catch(Exception $e){ throw new RepositoryDatabaseException(previous: $e); }
+            try { $row = $this->generateDbRow($entity, true); }
+            catch(Throwable $e) {
+                if(count($entities) > 1) $this->txnRollback();
+                throw $e;
+            }
 
-        $this->cache[$class][$entity->$primaryProp] = $entity;
+            try {
+                $this->db->insert($entityConfig->table, $row);
+            } catch (Exception $e) {
+                if(count($entities) > 1) $this->txnRollback();
+                throw new RepositoryDatabaseException(previous: $e);
+            }
 
+            $this->cache[$class][$entity->$primaryProp] = $entity;
+        }
+
+        if(count($entities) > 1) $this->txnCommit();
         return $this;
     }
 
@@ -186,27 +203,24 @@ abstract class Repository
         foreach ($entityConfig->getProps() as $prop => $propConfig) {
             /** @var PropConfig $propConfig */
 
-            if (!isset($entity->$prop)) continue; // TODO check if this makes sense
+            // property's either not initialized or null, we're not going to store it
+            if (!isset($entity->$prop)) continue;
 
-            // TODO rethink what exactly should be validated - primitive types only perhaps?
-            //$validator = new Validator($propConfig->validation);
-            //$validator($entity->$prop);
-
-            if (!empty($propConfig->parent))
-                $value = $entity->$prop->{$this->config->for($propConfig->typeClass)->primaryProp};
-
+            if (!empty($propConfig->parent)) {
+                $parentPrimaryProp = $this->config->for($propConfig->typeClass)->primaryProp;
+                $value = $entity->$prop->$parentPrimaryProp;
+            }
             else if (isset($propConfig->converter)) {
                 /** @var BaseConverter $converter */
                 $converter = new $propConfig->converter($this, $class, $prop);
                 $value = $converter->convertForDatabase($entity->$prop);
             }
+            else $value = $entity->$prop;
 
-            else if ($propConfig->serialize)    $value = serialize($entity->$prop);
-            else if ($propConfig->jsonize)      $value = json_encode($entity->$prop);
-            else                                $value = $entity->$prop;
+            $validator = new Validator($propConfig->validation);
+            $validator->validate($value, $prop);
 
             $row[$propsColumn][$propConfig->column] = $value;
-
             if ($propConfig->index) $row[$propConfig->column] = $value;
         }
 
@@ -300,7 +314,9 @@ abstract class Repository
     }
 
 
-
+    /**
+     * @throws RepositoryDatabaseException
+     */
     public function txnBegin()
     {
         try {
@@ -311,6 +327,9 @@ abstract class Repository
     }
 
 
+    /**
+     * @throws RepositoryDatabaseException
+     */
     public function txnCommit()
     {
         try {
@@ -321,6 +340,9 @@ abstract class Repository
     }
 
 
+    /**
+     * @throws RepositoryDatabaseException
+     */
     public function txnRollback()
     {
         try {

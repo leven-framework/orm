@@ -2,7 +2,7 @@
 
 use DateTime;
 
-class DateTimeStringConverter extends BaseConverter
+final class DateTimeStringConverter extends BaseConverter
 {
 
     public function convertForDatabase($value): string

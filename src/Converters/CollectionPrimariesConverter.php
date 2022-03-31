@@ -11,7 +11,7 @@ class CollectionPrimariesConverter extends BaseConverter
      *
      * @var string|null
      */
-    public ?string $collectionEntityClass = null;
+    protected ?string $collectionEntityClass = null;
 
     public function convertForDatabase($value): string
     {

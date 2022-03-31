@@ -16,8 +16,6 @@ class PropConfig
         public ?string $column = null,
         public bool $primary = false,
         public ?string $converter = null,
-        public bool $serialize = false,
-        public bool $jsonize = false,
         public array $custom = [],
     )
     {

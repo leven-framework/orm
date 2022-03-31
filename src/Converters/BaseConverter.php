@@ -16,7 +16,7 @@ abstract class BaseConverter
     {
     }
 
-    abstract public function convertForDatabase($value): string|int|bool|null;
+    abstract public function convertForDatabase($value): null|bool|string|int|float;
 
     abstract public function convertForPhp($value): mixed;
 

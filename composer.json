@@ -2,6 +2,7 @@
   "name": "leven-framework/orm",
   "type": "library",
   "require": {
+    "ext-ctype": "*",
     "leven-framework/dba-common": "@dev"
   },
   "autoload": {
