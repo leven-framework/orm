@@ -1,20 +1,19 @@
 <?php namespace Leven\ORM;
 
-use Leven\ORM\Exceptions\{EntityNotFoundException, PropertyValidationException, RepositoryDatabaseException};
-use Leven\ORM\{Attributes\PropConfig, Converters\BaseConverter};
 use Leven\DBA\Common\DatabaseAdapterInterface;
 use Leven\DBA\Common\Exception\{DatabaseAdapterException, EmptyResultException};
-use Exception;
-use Throwable;
+use Leven\ORM\{Attributes\PropConfig, Converters\BaseConverter};
+use Leven\ORM\Exceptions\{EntityNotFoundException, PropertyValidationException, RepositoryDatabaseException};
+use Throwable, Exception;
 
-abstract class Repository
+abstract class Repository implements RepositoryInterface
 {
 
-    private array $cache;
+    protected array $cache;
 
     public function __construct(
-        private readonly DatabaseAdapterInterface $db,
-        private readonly RepositoryConfig $config = new RepositoryConfig
+        protected readonly DatabaseAdapterInterface $db,
+        protected readonly RepositoryConfig $config = new RepositoryConfig
     )
     {
     }
@@ -61,7 +60,7 @@ abstract class Repository
     }
 
 
-    public function parsePropsFromDbRow(string $entityClass, array $row): array
+    protected function parsePropsFromDbRow(string $entityClass, array $row): array
     {
         $entityConfig = $this->config->for($entityClass);
 
@@ -88,7 +87,7 @@ abstract class Repository
     }
 
 
-    public function spawnEntityFromProps(string $entityClass, array $props): Entity
+    protected function spawnEntityFromProps(string $entityClass, array $props): Entity
     {
         $entityConfig = $this->config->for($entityClass);
         $primaryValue = $props[$entityConfig->primaryProp];
@@ -110,6 +109,12 @@ abstract class Repository
         $this->cache[$entityClass][$primaryValue] = $entity;
 
         return $entity;
+    }
+
+    public function spawnEntityFromDbRow(string $entityClass, array $row): Entity
+    {
+        $props = $this->parsePropsFromDbRow($entityClass, $row);
+        return $this->spawnEntityFromProps($entityClass, $props);
     }
 
     /**
@@ -188,7 +193,7 @@ abstract class Repository
     /**
      * @throws PropertyValidationException
      */
-    private function generateDbRow(Entity $entity, $isCreation = false): array
+    protected function generateDbRow(Entity $entity, $isCreation = false): array
     {
         $class = get_class($entity);
         $entityConfig = $this->config->for($class);
@@ -276,16 +281,6 @@ abstract class Repository
         return $this;
     }
 
-
-    public function all(string $entityClass): Query
-    {
-        return new Query(
-            repo: $this,
-            class: $entityClass,
-            conditions: []
-        );
-    }
-
     public function find(string $entityClass, array $conditions = []): Query
     {
         return new Query(
@@ -293,6 +288,11 @@ abstract class Repository
             class: $entityClass,
             conditions: $conditions
         );
+    }
+
+    public function all(string $entityClass): Query
+    {
+        return $this->find($entityClass);
     }
 
     // TODO accept array of entities as first param

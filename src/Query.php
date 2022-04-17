@@ -14,7 +14,7 @@ final class Query
     protected int $offset;
 
     public function __construct(
-        protected Repository $repo,
+        protected RepositoryInterface $repo,
         protected string $class,
         array $conditions
     ){
@@ -53,12 +53,10 @@ final class Query
 
     public function get(): Collection
     {
-        $entities = [];
-        foreach ($this->getFromRepoDB()->rows as $row){
-            $props = $this->repo->parsePropsFromDbRow($this->class, $row);
-            $entities[] = $this->repo->spawnEntityFromProps($this->class, $props);
-        }
-        return new Collection($this->class, ...$entities);
+        foreach ($this->getFromRepoDB()->rows as $row)
+            $entities[] = $this->repo->spawnEntityFromDbRow($this->class, $row);
+
+        return new Collection($this->class, ...($entities??[]));
     }
 
     public function getFirst(): Entity
@@ -66,8 +64,7 @@ final class Query
         $rows = $this->getFromRepoDB()->rows;
         if(!isset($rows[0])) throw new EntityNotFoundException;
 
-        $props = $this->repo->parsePropsFromDbRow($this->class, $rows[0]);
-        return $this->repo->spawnEntityFromProps($this->class, $props);
+        return $this->repo->spawnEntityFromDbRow($this->class, $rows[0]);
     }
 
     // INTERNAL //
