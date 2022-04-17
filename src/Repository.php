@@ -69,7 +69,7 @@ abstract class Repository
 
         $props = [];
         foreach ($decoded as $column => $value) {
-            $propName = $entityConfig->columns[$column];
+            $propName = $entityConfig->columns[$column] ?? null;
             $propConfig = $entityConfig->getProp($propName);
 
             if (!empty($propConfig->parent)) {

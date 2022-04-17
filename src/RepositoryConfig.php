@@ -19,7 +19,7 @@ class RepositoryConfig
     }
 
 
-    public function for(string $entityClass): EntityConfig
+    public function for(?string $entityClass): EntityConfig
     {
         if(!isset($this->store[$entityClass]))
             throw new Exception("entity class $entityClass not recognized");
@@ -52,9 +52,11 @@ class RepositoryConfig
                 $propConfig->setColumnFromPropName($prop->name);
 
             $validationAttribute = $prop->getAttributes(ValidationConfig::class)[0] ?? null;
-            if (!is_null($validationAttribute))
-                $propConfig->validation = $validationAttribute->newInstance();
-            else
+            if (!is_null($validationAttribute)) {
+                /** @var ValidationConfig $validation */
+                $validation = $validationAttribute->newInstance();
+                $propConfig->validation = $validation;
+            }else
                 $propConfig->validation = new ValidationConfig();
 
             $entityConfig->addProp($propConfig);

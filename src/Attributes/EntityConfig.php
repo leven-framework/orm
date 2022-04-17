@@ -30,7 +30,7 @@ class EntityConfig
         $this->columns[$prop->column] = $prop->name;
     }
 
-    public function getProp(string $name): PropConfig
+    public function getProp(?string $name): PropConfig
     {
         if(!isset($this->props[$name]))
             throw new \Exception("prop $name does not exist");
