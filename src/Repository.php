@@ -1,10 +1,9 @@
 <?php namespace Leven\ORM;
 
-use Leven\DBA\Common\DatabaseAdapterInterface;
-use Leven\DBA\Common\Exception\{DatabaseAdapterException, EmptyResultException};
+use Leven\DBA\Common\AdapterInterface;
+use Leven\DBA\Common\Exception\AdapterException;
 use Leven\ORM\{Attributes\PropConfig, Converters\BaseConverter};
 use Leven\ORM\Exceptions\{EntityNotFoundException, PropertyValidationException, RepositoryDatabaseException};
-use Throwable, Exception;
 
 abstract class Repository implements RepositoryInterface
 {
@@ -12,13 +11,13 @@ abstract class Repository implements RepositoryInterface
     protected array $cache;
 
     public function __construct(
-        protected readonly DatabaseAdapterInterface $db,
+        protected readonly AdapterInterface $db,
         protected readonly RepositoryConfig $config = new RepositoryConfig
     )
     {
     }
 
-    public function getDb(): DatabaseAdapterInterface
+    public function getDb(): AdapterInterface
     {
         return $this->db;
     }
@@ -40,21 +39,16 @@ abstract class Repository implements RepositoryInterface
             return $this->cache[$entityClass][$primaryValue];
 
         try {
-            $row = $this->db->get(
-                table: $entityConfig->table,
-                columns: $entityConfig->propsColumn,
-                conditions: [
-                    $entityConfig->getPrimaryColumn() => $primaryValue
-                ],
-                options: [ 'single' => 'true' ]
-            )->row;
-        }
-        catch (EmptyResultException){
-            throw new EntityNotFoundException;
-        } catch (Exception $e){
+            $rows = $this->db->select($entityConfig->table)
+                ->columns($entityConfig->propsColumn)
+                ->where($entityConfig->getPrimaryColumn(), $primaryValue)
+                ->limit(1)
+                ->execute()->rows;
+        } catch (AdapterException $e){
             throw new RepositoryDatabaseException(previous: $e);
         }
 
+        $row = $rows[0] ?? throw new EntityNotFoundException;
         $props = $this->parsePropsFromDbRow($entityClass, $row);
         return $this->spawnEntityFromProps($entityClass, $props);
     }
@@ -130,24 +124,22 @@ abstract class Repository implements RepositoryInterface
             $entityConfig = $this->config->for($class);
             $primaryProp = $entityConfig->primaryProp;
 
-            // TODO update props value only if some of the non-indexed props are dirty
+            // TODO update props value only if it's "dirty"
 
+            // TODO do this better
             try { $row = $this->generateDbRow($entity); }
-            catch(Throwable $e) {
+            catch(\Exception $e) {
                 if(count($entities) > 1) $this->txnRollback();
                 throw $e;
             }
 
             try {
-                $this->db->update(
-                    table: $entityConfig->table,
-                    data: $row,
-                    conditions: [
-                        $entityConfig->getPrimaryColumn() => $entity->$primaryProp
-                    ],
-                    options: ['limit' => 1]
-                );
-            } catch (Exception $e) {
+                $this->db->update($entityConfig->table)
+                    ->set($row)
+                    ->where($entityConfig->getPrimaryColumn(), $entity->$primaryProp)
+                    ->limit(1)
+                    ->execute();
+            } catch (AdapterException $e) {
                 if(count($entities) > 1) $this->txnRollback();
                 throw new RepositoryDatabaseException(previous: $e);
             }
@@ -170,15 +162,16 @@ abstract class Repository implements RepositoryInterface
             $entityConfig = $this->config->for($class);
             $primaryProp = $entityConfig->primaryProp;
 
+            // TODO do this better
             try { $row = $this->generateDbRow($entity, true); }
-            catch(Throwable $e) {
+            catch(\Exception $e) {
                 if(count($entities) > 1) $this->txnRollback();
                 throw $e;
             }
 
             try {
                 $this->db->insert($entityConfig->table, $row);
-            } catch (Exception $e) {
+            } catch (AdapterException $e) {
                 if(count($entities) > 1) $this->txnRollback();
                 throw new RepositoryDatabaseException(previous: $e);
             }
@@ -234,6 +227,9 @@ abstract class Repository implements RepositoryInterface
     }
 
 
+    /**
+     * @throws EntityNotFoundException
+     */
     public function delete(string $entityClass, string $primaryValue): static
     {
         $entityConfig = $this->config->for($entityClass);
@@ -242,13 +238,10 @@ abstract class Repository implements RepositoryInterface
             if(isset($childEntityConfig->parentColumns[$entityClass])) {
                 $childPrimaryColumn = $childEntityConfig->getPrimaryColumn();
 
-                $result = $this->db->get(
-                    table: $childEntityConfig->table,
-                    columns: $childPrimaryColumn,
-                    conditions: [
-                        $childEntityConfig->parentColumns[$entityClass] => $primaryValue
-                    ]
-                );
+                $result = $this->db->select($childEntityConfig->table)
+                    ->columns($childPrimaryColumn)
+                    ->where($childEntityConfig->parentColumns[$entityClass], $primaryValue)
+                    ->execute();
 
                 foreach($result->rows as $row){
                     $childEntityPrimaryValue = $row[$childPrimaryColumn];
@@ -256,13 +249,10 @@ abstract class Repository implements RepositoryInterface
                 }
             }
 
-        $result = $this->db->delete(
-            table: $entityConfig->table,
-            conditions: [
-                $entityConfig->getPrimaryColumn() => $primaryValue
-            ],
-            options: ['single' => true]
-        );
+        $result = $this->db->delete($entityConfig->table)
+            ->where($entityConfig->getPrimaryColumn(), $primaryValue)
+            ->limit(1)
+            ->execute();
 
         if(!$result->count) throw new EntityNotFoundException;
 
@@ -271,6 +261,9 @@ abstract class Repository implements RepositoryInterface
         return $this;
     }
 
+    /**
+     * @throws EntityNotFoundException
+     */
     public function deleteEntity(Entity $entity): static
     {
         $entityClass = get_class($entity);
@@ -319,9 +312,8 @@ abstract class Repository implements RepositoryInterface
      */
     public function txnBegin()
     {
-        try {
-            return $this->db->txnBegin();
-        } catch (DatabaseAdapterException $e) {
+        try { $this->db->txnBegin(); }
+        catch (AdapterException $e) {
             throw new RepositoryDatabaseException(previous: $e);
         }
     }
@@ -332,9 +324,8 @@ abstract class Repository implements RepositoryInterface
      */
     public function txnCommit()
     {
-        try {
-            $this->db->txnCommit();
-        } catch (DatabaseAdapterException $e) {
+        try { $this->db->txnCommit(); }
+        catch (AdapterException $e) {
             throw new RepositoryDatabaseException(previous: $e);
         }
     }
@@ -345,9 +336,8 @@ abstract class Repository implements RepositoryInterface
      */
     public function txnRollback()
     {
-        try {
-            $this->db->txnRollback();
-        } catch (DatabaseAdapterException $e) {
+        try { $this->db->txnRollback(); }
+        catch (AdapterException $e) {
             throw new RepositoryDatabaseException(previous: $e);
         }
     }

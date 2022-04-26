@@ -7,7 +7,7 @@ class Validator
 {
 
     public function __construct(
-        private ValidationConfig $config
+        protected ValidationConfig $config
     )
     {
     }

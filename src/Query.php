@@ -1,116 +1,91 @@
 <?php namespace Leven\ORM;
 
-use Leven\DBA\Common\{DatabaseAdapterResponse, Exception\DatabaseAdapterException};
+use Leven\DBA\Common\SelectQueryInterface;
 use Leven\ORM\Attributes\EntityConfig;
-use Leven\ORM\Exceptions\{EntityNotFoundException, RepositoryDatabaseException};
+use Leven\ORM\Exceptions\EntityNotFoundException;
 
 final class Query
 {
 
-    protected array $conditions;
-    protected string $order;
-    protected string $orderProp;
-    protected int $limit;
-    protected int $offset;
+    public readonly SelectQueryInterface $dbQuery;
 
     public function __construct(
         protected RepositoryInterface $repo,
         protected string $class,
-        array $conditions
+        array $conditions = [],
     ){
-        $this->conditions = $this->replaceConditionsPropsWithColumns($conditions);
+        $this->dbQuery = $this->repo->getDb()
+            ->select($this->getEntityConfig()->table)
+            ->columns($this->getEntityConfig()->propsColumn)
+        ;
+
+        foreach ($conditions as $prop => $value)
+            $this->dbQuery->where($this->getPropColumn($prop), $value);
+
     }
 
     // BUILDER //
 
-    public function limit(int $limit, ?int $offset = null): Query
+    public function limit(int $limitOrOffset, int $limit = 0): Query
     {
-        $this->limit = $limit;
-        if($offset > 0) $this->offset = $offset;
+        $this->dbQuery->limit($limitOrOffset, $limit);
         return $this;
     }
 
     public function orderAsc(string $prop): Query
     {
-        $this->order = 'ASC';
-        $this->orderProp = $this->getPropColumn($prop);
+        $this->dbQuery->orderAsc($this->getPropColumn($prop));
         return $this;
     }
 
     public function orderDesc(string $prop): Query
     {
-        $this->order = 'DESC';
-        $this->orderProp = $this->getPropColumn($prop);
+        $this->dbQuery->orderDesc($this->getPropColumn($prop));
         return $this;
     }
+
 
     // RESULT //
 
     public function count(): int
     {
-        return $this->getFromRepoDB(true)->rows[0]['COUNT(*)'];
+        return $this->dbQuery->execute()->count;
+        // TODO return $this->dbQuery->executeCount();
     }
 
     public function get(): Collection
     {
-        foreach ($this->getFromRepoDB()->rows as $row)
+        foreach ($this->dbQuery->execute()->rows as $row)
             $entities[] = $this->repo->spawnEntityFromDbRow($this->class, $row);
 
-        return new Collection($this->class, ...($entities??[]));
+        return new Collection($this->class, ...($entities ?? []));
     }
 
     public function getFirst(): Entity
     {
-        $rows = $this->getFromRepoDB()->rows;
-        if(!isset($rows[0])) throw new EntityNotFoundException;
+        return $this->tryFirst() ?? throw new EntityNotFoundException;
+    }
+
+    public function tryFirst(): ?Entity
+    {
+        $rows = $this->dbQuery->execute()->rows;
+        if(!isset($rows[0])) return null;
 
         return $this->repo->spawnEntityFromDbRow($this->class, $rows[0]);
     }
 
     // INTERNAL //
 
-    private function getEntityConfig(): EntityConfig
+    protected function getEntityConfig(): EntityConfig
     {
         return $this->repo->getConfig()->for($this->class);
     }
 
-    private function getPropColumn(string $prop): string
+    protected function getPropColumn(string $prop): string
     {
         $column = $this->getEntityConfig()->getProp($prop)->column ?? '';
         if(empty($column)) throw new \Exception("prop $prop or its column not configured");
         return $column;
-    }
-
-    private function replaceConditionsPropsWithColumns(array $conditions): array
-    {
-        $newConditions = [];
-        foreach ($conditions as $prop => $value)
-            $newConditions[$this->getPropColumn($prop)] = $value;
-        return $newConditions;
-    }
-
-    private function getFromRepoDB(bool $count = false): DatabaseAdapterResponse
-    {
-        try {
-            return $this->repo->getDb()->get(
-                table: $this->getEntityConfig()->table,
-                columns: !$count ? $this->getEntityConfig()->propsColumn : 'COUNT(*)',
-                conditions: $this->conditions,
-                options: $this->generateOptions()
-            );
-        } catch (DatabaseAdapterException $e) {
-            throw new RepositoryDatabaseException(previous: $e);
-        }
-    }
-
-    private function generateOptions(): array
-    {
-        $options = [];
-        if(isset($this->limit)) $options['limit'] = $this->limit;
-        if(isset($this->offset)) $options['offset'] = $this->offset;
-        if(isset($this->order))
-            $options['order'] = $this->orderProp . ' ' . $this->order;
-        return $options;
     }
 
 }

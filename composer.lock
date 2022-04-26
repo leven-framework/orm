@@ -4,27 +4,26 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3e0f023e3ce93652ea510c0816c58769",
+    "content-hash": "51364c6f6fe22eba798f1492cc725edc",
     "packages": [
         {
             "name": "leven-framework/dba-common",
-            "version": "dev-master",
+            "version": "1.0.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/leven-framework/dba-common.git",
-                "reference": "125a2199dbb2838de577e480d8cc8b0c35492ea7"
+                "reference": "029fd39288638f16bdd82955d30ca0c02056ec62"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/leven-framework/dba-common/zipball/125a2199dbb2838de577e480d8cc8b0c35492ea7",
-                "reference": "125a2199dbb2838de577e480d8cc8b0c35492ea7",
+                "url": "https://api.github.com/repos/leven-framework/dba-common/zipball/029fd39288638f16bdd82955d30ca0c02056ec62",
+                "reference": "029fd39288638f16bdd82955d30ca0c02056ec62",
                 "shasum": ""
             },
             "suggest": {
-                "leven-framework/dba-mock": "Mock a database using e.g. a local file",
+                "leven-framework/dba-mock": "Mock a database using an array",
                 "leven-framework/dba-mysql": "PDO MySQL adapter"
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
@@ -34,20 +33,20 @@
             "notification-url": "https://packagist.org/downloads/",
             "support": {
                 "issues": "https://github.com/leven-framework/dba-common/issues",
-                "source": "https://github.com/leven-framework/dba-common/tree/master"
+                "source": "https://github.com/leven-framework/dba-common/tree/1.0.0"
             },
-            "time": "2022-03-30T12:20:00+00:00"
+            "time": "2022-04-26T15:16:37+00:00"
         }
     ],
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "leven-framework/dba-common": 20
-    },
+    "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
-    "platform": [],
+    "platform": {
+        "ext-ctype": "*"
+    },
     "platform-dev": [],
     "plugin-api-version": "2.2.0"
 }

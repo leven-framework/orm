@@ -2,12 +2,12 @@
 
 namespace Leven\ORM;
 
-use Leven\DBA\Common\DatabaseAdapterInterface;
+use Leven\DBA\Common\AdapterInterface;
 use Leven\ORM\Exceptions\{EntityNotFoundException, PropertyValidationException, RepositoryDatabaseException};
 
 interface RepositoryInterface
 {
-    public function getDb(): DatabaseAdapterInterface;
+    public function getDb(): AdapterInterface;
     public function getConfig(): RepositoryConfig;
 
     /**
