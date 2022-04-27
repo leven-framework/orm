@@ -26,8 +26,11 @@ class EntityConfig
     public function addProp(PropConfig $prop): void
     {
         $this->props[$prop->name] = $prop;
-        if($prop->primary) $this->primaryProp = $prop->name;
         $this->columns[$prop->column] = $prop->name;
+
+        if($prop->primary) $this->primaryProp = $prop->name;
+        if($prop->inConstructor) $this->constructorProps[] = $prop->name;
+        if($prop->parent) $this->parentColumns[$prop->typeClass] = $prop->column;
     }
 
     public function getProp(?string $name): PropConfig
@@ -48,7 +51,7 @@ class EntityConfig
         return $this->props[$this->primaryProp]->column;
     }
 
-    public function setTableFromClassName(string $class): void
+    public function generateTable(string $class): void
     {
         $this->table = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $class));
     }

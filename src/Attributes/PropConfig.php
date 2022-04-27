@@ -8,6 +8,7 @@ class PropConfig
 
     public string $name;
     public bool $parent;
+    public bool $inConstructor = false;
     public string $typeClass;
     public ValidationConfig $validation;
 
@@ -22,7 +23,7 @@ class PropConfig
         if($this->primary) $this->index = true;
     }
 
-    public function setColumnFromPropName(string $prop): void
+    public function generateColumn(string $prop): void
     {
         $this->column = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $prop));
     }

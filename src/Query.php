@@ -1,5 +1,7 @@
 <?php namespace Leven\ORM;
 
+use Leven\DBA\Common\AdapterResponse;
+use Leven\DBA\Common\BuilderPart\WhereGroup;
 use Leven\DBA\Common\SelectQueryInterface;
 use Leven\ORM\Attributes\EntityConfig;
 use Leven\ORM\Exceptions\EntityNotFoundException;
@@ -8,20 +10,19 @@ final class Query
 {
 
     public readonly SelectQueryInterface $dbQuery;
+    protected readonly WhereGroup $conditions;
 
     public function __construct(
         protected RepositoryInterface $repo,
-        protected string $class,
-        array $conditions = [],
+        protected string $class
     ){
         $this->dbQuery = $this->repo->getDb()
             ->select($this->getEntityConfig()->table)
             ->columns($this->getEntityConfig()->propsColumn)
         ;
 
-        foreach ($conditions as $prop => $value)
-            $this->dbQuery->where($this->getPropColumn($prop), $value);
-
+        // we'll be putting all user conditions in this group
+        $this->dbQuery->where(fn(WhereGroup $w) => $this->conditions = $w);
     }
 
     // BUILDER //
@@ -44,18 +45,23 @@ final class Query
         return $this;
     }
 
+    public function where(string $prop, $valueOrOperator, $value = []): Query
+    {
+        $this->conditions->where($this->getPropColumn($prop), $valueOrOperator, $value);
+        return $this;
+    }
 
     // RESULT //
 
     public function count(): int
     {
-        return $this->dbQuery->execute()->count;
+        return $this->execute()->count;
         // TODO return $this->dbQuery->executeCount();
     }
 
     public function get(): Collection
     {
-        foreach ($this->dbQuery->execute()->rows as $row)
+        foreach ($this->execute()->rows as $row)
             $entities[] = $this->repo->spawnEntityFromDbRow($this->class, $row);
 
         return new Collection($this->class, ...($entities ?? []));
@@ -68,13 +74,19 @@ final class Query
 
     public function tryFirst(): ?Entity
     {
-        $rows = $this->dbQuery->execute()->rows;
+        $rows = $this->execute()->rows;
         if(!isset($rows[0])) return null;
 
         return $this->repo->spawnEntityFromDbRow($this->class, $rows[0]);
     }
 
     // INTERNAL //
+
+    protected function execute(): AdapterResponse
+    {
+        // TODO prevent multiple executions
+        return $this->dbQuery->execute();
+    }
 
     protected function getEntityConfig(): EntityConfig
     {
@@ -83,9 +95,8 @@ final class Query
 
     protected function getPropColumn(string $prop): string
     {
-        $column = $this->getEntityConfig()->getProp($prop)->column ?? '';
-        if(empty($column)) throw new \Exception("prop $prop or its column not configured");
-        return $column;
+        return $this->getEntityConfig()->getProp($prop)->column
+            ?: throw new \Exception("prop $prop or its column not configured");
     }
 
 }

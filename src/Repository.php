@@ -1,6 +1,7 @@
 <?php namespace Leven\ORM;
 
 use Leven\DBA\Common\AdapterInterface;
+use Leven\DBA\Common\BuilderPart\WhereGroup;
 use Leven\DBA\Common\Exception\AdapterException;
 use Leven\ORM\{Attributes\PropConfig, Converters\BaseConverter};
 use Leven\ORM\Exceptions\{EntityNotFoundException, PropertyValidationException, RepositoryDatabaseException};
@@ -274,13 +275,9 @@ abstract class Repository implements RepositoryInterface
         return $this;
     }
 
-    public function find(string $entityClass, array $conditions = []): Query
+    public function find(string $entityClass): Query
     {
-        return new Query(
-            repo: $this,
-            class: $entityClass,
-            conditions: $conditions
-        );
+        return new Query($this, $entityClass);
     }
 
     public function all(string $entityClass): Query
@@ -289,21 +286,29 @@ abstract class Repository implements RepositoryInterface
     }
 
     // TODO accept array of entities as first param
-    public function findChildrenOf(Entity|array $parentEntity, string $childrenEntityClass, array $conditions = []): Query
+    public function findChildrenOf(Entity|array $parentEntities, string $childrenEntityClass): Query
     {
-        $parentEntityClass = get_class($parentEntity);
-        $parentClassConfig = $this->config->for($parentEntityClass);
-        $childClassConfig = $this->config->for($childrenEntityClass);
+        if(!is_array($parentEntities)) $parentEntities = [$parentEntities];
+        if(empty($parentEntities)) throw new \Exception('parentEntities cannot be empty');
 
-        return new Query(
-            repo: $this,
-            class: $childrenEntityClass,
-            conditions: [
-                $childClassConfig->parentColumns[$parentEntityClass] =>
-                    $parentEntity->{$parentClassConfig->primaryProp},
-                ...$conditions
-            ]
-        );
+        $childClassConfig = $this->config->for($childrenEntityClass);
+        $conditions = [];
+
+        foreach($parentEntities as $parentEntity){
+            $parentEntityClass = get_class($parentEntity);
+            $parentClassConfig = $this->config->for($parentEntityClass);
+
+            $conditions[$childClassConfig->parentColumns[$parentEntityClass]] =
+                $parentEntity->{$parentClassConfig->primaryProp};
+        }
+
+        $query = new Query($this, $childrenEntityClass);
+
+        $query->dbQuery->andWhere(function(WhereGroup $w) use ($conditions) {
+            foreach($conditions as $column => $value) $w->where($column, $value);
+        });
+
+        return $query;
     }
 
 

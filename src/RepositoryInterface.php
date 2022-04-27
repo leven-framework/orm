@@ -34,11 +34,11 @@ interface RepositoryInterface
 
     public function deleteEntity(Entity $entity): static;
 
-    public function find(string $entityClass, array $conditions = []): Query;
+    public function find(string $entityClass): Query;
 
     public function all(string $entityClass): Query;
 
-    public function findChildrenOf(Entity|array $parentEntity, string $childrenEntityClass, array $conditions = []): Query;
+    public function findChildrenOf(Entity|array $parentEntities, string $childrenEntityClass): Query;
 
     /**
      * @throws RepositoryDatabaseException

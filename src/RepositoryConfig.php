@@ -34,48 +34,38 @@ class RepositoryConfig
     {
         $classReflection = new ReflectionClass($entityClass);
 
+        // store all properties promoted in constructor
+        foreach ($classReflection->getConstructor()?->getParameters() ?? [] as $constructorParam)
+            if($constructorParam->isPromoted()) $promotedParams[] = $constructorParam->name;
+
         $attribute = $classReflection->getAttributes(EntityConfig::class)[0] ?? null;
-        if (!is_null($attribute)) $entityConfig = $attribute->newInstance();
-        else $entityConfig = new EntityConfig();
+        $entityConfig = $attribute?->getArguments()[0] ?? new EntityConfig();
 
         $entityConfig->name = $entityClass;
-        if (!isset($entityConfig->table))
-            $entityConfig->setTableFromClassName($classReflection->getShortName());
+        empty($entityConfig->table) && $entityConfig->generateTable($classReflection->getShortName());
 
         foreach ($classReflection->getProperties(ReflectionProperty::IS_PUBLIC) as $prop) {
             $attribute = $prop->getAttributes(PropConfig::class)[0] ?? null;
-            if (!is_null($attribute)) $propConfig = $attribute->newInstance();
-            else $propConfig = new PropConfig();
+            $propConfig = $attribute?->newInstance() ?? new PropConfig();
 
             $propConfig->name = $prop->name;
-            if (!isset($propConfig->column))
-                $propConfig->setColumnFromPropName($prop->name);
+            empty($propConfig->column) && $propConfig->generateColumn($prop->name);
 
             $validationAttribute = $prop->getAttributes(ValidationConfig::class)[0] ?? null;
-            if (!is_null($validationAttribute)) {
-                /** @var ValidationConfig $validation */
-                $validation = $validationAttribute->newInstance();
-                $propConfig->validation = $validation;
-            }else
-                $propConfig->validation = new ValidationConfig();
+            $propConfig->validation = $validationAttribute?->newInstance() ?? new ValidationConfig();
 
-            $entityConfig->addProp($propConfig);
+            in_array($prop->name, $promotedParams ?? []) && $propConfig->inConstructor = true;
 
             $propType = $prop->getType();
-            if(!$propType instanceof ReflectionNamedType || $propType->isBuiltin()) continue;
+            if($propType instanceof ReflectionNamedType && !$propType->isBuiltin()) {
+                $propConfig->typeClass = $propType->getName();
 
-            $propTypeName = $propType->getName();
-            $propConfig->typeClass = $propTypeName;
-
-            if(is_subclass_of($propTypeName, Entity::class)) {
-                $propConfig->parent = true;
-                $propConfig->index = true;
-                $entityConfig->parentColumns[$propTypeName] = $propConfig->column;
+                if(is_subclass_of($prop->$propConfig, Entity::class))
+                    $propConfig->parent = $propConfig->index = true;
             }
-        }
 
-        foreach ($classReflection->getConstructor()?->getParameters() ?? [] as $param)
-            $entityConfig->constructorProps[] = $param->name;
+            $entityConfig->addProp($propConfig);
+        }
 
         $this->store[$entityClass] = $entityConfig;
     }
