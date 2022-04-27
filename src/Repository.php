@@ -28,11 +28,21 @@ abstract class Repository implements RepositoryInterface
         return $this->config;
     }
 
+
     /**
-     * @throws EntityNotFoundException
      * @throws RepositoryDatabaseException
+     * @throws EntityNotFoundException
      */
     public function get(string $entityClass, string $primaryValue): Entity
+    {
+        return $this->try($entityClass, $primaryValue)
+            ?? throw new EntityNotFoundException;
+    }
+
+    /**
+     * @throws RepositoryDatabaseException
+     */
+    public function try(string $entityClass, string $primaryValue): ?Entity
     {
         $entityConfig = $this->config->for($entityClass);
 
@@ -49,8 +59,8 @@ abstract class Repository implements RepositoryInterface
             throw new RepositoryDatabaseException(previous: $e);
         }
 
-        $row = $rows[0] ?? throw new EntityNotFoundException;
-        $props = $this->parsePropsFromDbRow($entityClass, $row);
+        if(!isset($rows[0])) return null;
+        $props = $this->parsePropsFromDbRow($entityClass, $rows[0]);
         return $this->spawnEntityFromProps($entityClass, $props);
     }
 
