@@ -1,10 +1,11 @@
-<?php namespace Leven\ORM;
+<?php
 
+namespace Leven\ORM;
+
+use InvalidArgumentException;
 use Leven\DBA\Common\AdapterInterface;
 use Leven\DBA\Common\BuilderPart\WhereGroup;
-use Leven\DBA\Common\Exception\AdapterException;
-use Leven\ORM\{Attributes\PropConfig, Converters\BaseConverter};
-use Leven\ORM\Exceptions\{EntityNotFoundException, PropertyValidationException, RepositoryDatabaseException};
+use Leven\ORM\Exceptions\{EntityNotFoundException, PropertyValidationException};
 
 abstract class Repository implements RepositoryInterface
 {
@@ -30,7 +31,6 @@ abstract class Repository implements RepositoryInterface
 
 
     /**
-     * @throws RepositoryDatabaseException
      * @throws EntityNotFoundException
      */
     public function get(string $entityClass, string $primaryValue): Entity
@@ -39,9 +39,6 @@ abstract class Repository implements RepositoryInterface
             ?? throw new EntityNotFoundException;
     }
 
-    /**
-     * @throws RepositoryDatabaseException
-     */
     public function try(string $entityClass, string $primaryValue): ?Entity
     {
         if (isset($this->cache[$entityClass][$primaryValue]))
@@ -49,15 +46,11 @@ abstract class Repository implements RepositoryInterface
 
         $entityConfig = $this->config->for($entityClass);
 
-        try {
-            $rows = $this->db->select($entityConfig->table)
-                ->columns($entityConfig->propsColumn)
-                ->where($entityConfig->getPrimaryColumn(), $primaryValue)
-                ->limit(1)
-                ->execute()->rows;
-        } catch (AdapterException $e){
-            throw new RepositoryDatabaseException(previous: $e);
-        }
+        $rows = $this->db->select($entityConfig->table)
+            ->columns($entityConfig->propsColumn)
+            ->where($entityConfig->getPrimaryColumn(), $primaryValue)
+            ->limit(1)
+            ->execute()->rows;
 
         if(!isset($rows[0])) return null;
         $props = $this->parsePropsFromDbRow($entityClass, $rows[0]);
@@ -117,7 +110,6 @@ abstract class Repository implements RepositoryInterface
 
     /**
      * @throws PropertyValidationException
-     * @throws RepositoryDatabaseException
      */
     public function update(Entity ...$entities): static
     {
@@ -139,9 +131,7 @@ abstract class Repository implements RepositoryInterface
             }
             catch (\Exception $e) {
                 if(count($entities) > 1) $this->txnRollback();
-
-                if($e instanceof AdapterException) throw new RepositoryDatabaseException(previous: $e);
-                throw $e; // rethrow the same exception
+                throw $e;
             }
         }
 
@@ -151,7 +141,6 @@ abstract class Repository implements RepositoryInterface
 
     /**
      * @throws PropertyValidationException
-     * @throws RepositoryDatabaseException
      */
     public function store(Entity ...$entities): static
     {
@@ -168,9 +157,7 @@ abstract class Repository implements RepositoryInterface
             }
             catch (\Exception $e) {
                 if(count($entities) > 1) $this->txnRollback();
-
-                if($e instanceof AdapterException) throw new RepositoryDatabaseException(previous: $e);
-                throw $e; // rethrow the same exception
+                throw $e;
             }
 
             $this->cache[$class][$entity->$primaryProp] = $entity;
@@ -193,8 +180,6 @@ abstract class Repository implements RepositoryInterface
         $isCreation && $entity->onCreate();
 
         foreach ($entityConfig->getProps() as $prop => $propConfig) {
-            /** @var PropConfig $propConfig */
-
             // property's either not initialized or null, we're not going to store it
             if (!isset($entity->$prop)) continue;
 
@@ -280,7 +265,7 @@ abstract class Repository implements RepositoryInterface
     public function findChildrenOf(Entity|array $parentEntities, string $childrenEntityClass): Query
     {
         if(!is_array($parentEntities)) $parentEntities = [$parentEntities];
-        if(empty($parentEntities)) throw new \Exception('parentEntities cannot be empty');
+        if(empty($parentEntities)) throw new InvalidArgumentException('parentEntities cannot be empty');
 
         $conditions = [];
         $childClassConfig = $this->config->for($childrenEntityClass);
@@ -303,39 +288,19 @@ abstract class Repository implements RepositoryInterface
     }
 
 
-    /**
-     * @throws RepositoryDatabaseException
-     */
     public function txnBegin()
     {
-        try { $this->db->txnBegin(); }
-        catch (AdapterException $e) {
-            throw new RepositoryDatabaseException(previous: $e);
-        }
+        $this->db->txnBegin();
     }
 
-
-    /**
-     * @throws RepositoryDatabaseException
-     */
     public function txnCommit()
     {
-        try { $this->db->txnCommit(); }
-        catch (AdapterException $e) {
-            throw new RepositoryDatabaseException(previous: $e);
-        }
+        $this->db->txnCommit();
     }
 
-
-    /**
-     * @throws RepositoryDatabaseException
-     */
     public function txnRollback()
     {
-        try { $this->db->txnRollback(); }
-        catch (AdapterException $e) {
-            throw new RepositoryDatabaseException(previous: $e);
-        }
+        $this->db->txnRollback();
     }
 
 }

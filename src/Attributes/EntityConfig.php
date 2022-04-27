@@ -1,4 +1,6 @@
-<?php namespace Leven\ORM\Attributes;
+<?php
+
+namespace Leven\ORM\Attributes;
 
 use Attribute;
 use Leven\ORM\Exceptions\EntityNotFoundException;
@@ -9,8 +11,9 @@ class EntityConfig
 
     public string $class;
 
-    public string $primaryProp;
+    /** @var PropConfig[] $props */
     private array $props = [];
+    public string $primaryProp;
     public array $columns = [];
     public array $parentColumns = [];
     public array $constructorProps = [];

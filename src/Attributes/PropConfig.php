@@ -1,4 +1,6 @@
-<?php namespace Leven\ORM\Attributes;
+<?php
+
+namespace Leven\ORM\Attributes;
 
 use Attribute;
 

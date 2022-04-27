@@ -1,8 +1,10 @@
-<?php namespace Leven\ORM;
+<?php
 
+namespace Leven\ORM;
+
+use DomainException;
 use Leven\ORM\Attributes\{EntityConfig, PropConfig, ValidationConfig};
 use ReflectionClass, ReflectionException, ReflectionProperty, ReflectionNamedType;
-use Exception;
 
 class RepositoryConfig
 {
@@ -22,7 +24,7 @@ class RepositoryConfig
     public function for(?string $entityClass): EntityConfig
     {
         if(!isset($this->store[$entityClass]))
-            throw new Exception("entity class $entityClass not recognized");
+            throw new DomainException("entity class $entityClass not recognized");
 
         return $this->store[$entityClass];
     }

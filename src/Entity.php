@@ -1,15 +1,17 @@
-<?php namespace Leven\ORM;
+<?php
 
-use Exception;
+namespace Leven\ORM;
+
+use InvalidArgumentException;
 
 abstract class Entity
 {
 
     /**
-     * @throws Exception when an undefined property is attempted to be set
+     * @throws InvalidArgumentException when an undefined property is attempted to be set
      */
     public function __set($name, $value){
-        throw new Exception("property $name does not exist");
+        throw new InvalidArgumentException("property $name does not exist");
     }
 
     /**

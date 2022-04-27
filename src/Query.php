@@ -1,5 +1,8 @@
-<?php namespace Leven\ORM;
+<?php
 
+namespace Leven\ORM;
+
+use DomainException;
 use Leven\DBA\Common\AdapterResponse;
 use Leven\DBA\Common\BuilderPart\WhereGroup;
 use Leven\DBA\Common\SelectQueryInterface;
@@ -96,7 +99,7 @@ final class Query
     protected function getPropColumn(string $prop): string
     {
         return $this->getEntityConfig()->getProp($prop)->column
-            ?: throw new \Exception("prop $prop or its column not configured");
+            ?: throw new DomainException("prop $prop or its column not configured");
     }
 
 }

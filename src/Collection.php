@@ -1,6 +1,9 @@
-<?php namespace Leven\ORM;
+<?php
+
+namespace Leven\ORM;
 
 use ArrayIterator, ArrayObject, IteratorAggregate;
+use InvalidArgumentException;
 
 class Collection implements IteratorAggregate
 {
@@ -29,7 +32,7 @@ class Collection implements IteratorAggregate
     public function add(Entity $entity): static
     {
         if(!$entity instanceof $this->class)
-            throw new \Exception("object is not instance of $this->class");
+            throw new InvalidArgumentException("object is not instance of $this->class");
 
         $this->store[] = $entity;
 
@@ -52,10 +55,9 @@ class Collection implements IteratorAggregate
 
     public function arrayOfProps($propName): array
     {
-        $out = [];
         foreach($this->store as $entity)
             $out[] = $entity->$propName;
-        return $out;
+        return $out ?? [];
     }
 
 }

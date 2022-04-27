@@ -3,7 +3,7 @@
 namespace Leven\ORM;
 
 use Leven\DBA\Common\AdapterInterface;
-use Leven\ORM\Exceptions\{EntityNotFoundException, PropertyValidationException, RepositoryDatabaseException};
+use Leven\ORM\Exceptions\{EntityNotFoundException, PropertyValidationException};
 
 interface RepositoryInterface
 {
@@ -12,21 +12,20 @@ interface RepositoryInterface
 
     /**
      * @throws EntityNotFoundException
-     * @throws RepositoryDatabaseException
      */
     public function get(string $entityClass, string $primaryValue): Entity;
+
+    public function try(string $entityClass, string $primaryValue): ?Entity;
 
     public function spawnEntityFromDbRow(string $entityClass, array $row): Entity;
 
     /**
      * @throws PropertyValidationException
-     * @throws RepositoryDatabaseException
      */
     public function update(Entity ...$entities): static;
 
     /**
      * @throws PropertyValidationException
-     * @throws RepositoryDatabaseException
      */
     public function store(Entity ...$entities): static;
 
@@ -40,18 +39,9 @@ interface RepositoryInterface
 
     public function findChildrenOf(Entity|array $parentEntities, string $childrenEntityClass): Query;
 
-    /**
-     * @throws RepositoryDatabaseException
-     */
     public function txnBegin();
 
-    /**
-     * @throws RepositoryDatabaseException
-     */
     public function txnCommit();
 
-    /**
-     * @throws RepositoryDatabaseException
-     */
     public function txnRollback();
 }

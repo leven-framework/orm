@@ -2,8 +2,6 @@
 
 namespace Leven\ORM\Converters;
 
-use Leven\ORM\Exceptions\PropertyValidationException;
-
 class SerializeConverter extends BaseConverter
 {
 
