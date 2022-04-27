@@ -7,9 +7,9 @@ class PropConfig
 {
 
     public string $name;
-    public bool $parent;
+    public bool $parent = false;
     public bool $inConstructor = false;
-    public string $typeClass;
+    public ?string $typeClass = null;
     public ValidationConfig $validation;
 
     public function __construct(
