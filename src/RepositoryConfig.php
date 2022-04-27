@@ -56,13 +56,11 @@ class RepositoryConfig
 
             in_array($prop->name, $promotedParams ?? []) && $propConfig->inConstructor = true;
 
-            $propType = $prop->getType();
-            if($propType instanceof ReflectionNamedType && !$propType->isBuiltin()) {
-                $propConfig->typeClass = $propType->getName();
-
-                if(is_subclass_of($prop->$propConfig, Entity::class))
+            // detect if property has a class type, if yes, store it (it's useful for custom converters)
+            // also detect if that class extends Entity which means this property is a parent
+            if(($propType = $prop->getType()) instanceof ReflectionNamedType && !$propType->isBuiltin())
+                if(is_subclass_of($propConfig->typeClass = $propType->getName(), Entity::class))
                     $propConfig->parent = $propConfig->index = true;
-            }
 
             $entityConfig->addProp($propConfig);
         }
