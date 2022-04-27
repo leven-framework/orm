@@ -36,7 +36,7 @@ interface RepositoryInterface
 
     public function find(string $entityClass): Query;
 
-    public function all(string $entityClass): Query;
+    public function all(string $entityClass): Collection;
 
     public function findChildrenOf(Entity|array $parentEntities, string $childrenEntityClass): Query;
 

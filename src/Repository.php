@@ -44,10 +44,10 @@ abstract class Repository implements RepositoryInterface
      */
     public function try(string $entityClass, string $primaryValue): ?Entity
     {
-        $entityConfig = $this->config->for($entityClass);
-
         if (isset($this->cache[$entityClass][$primaryValue]))
             return $this->cache[$entityClass][$primaryValue];
+
+        $entityConfig = $this->config->for($entityClass);
 
         try {
             $rows = $this->db->select($entityConfig->table)
@@ -70,25 +70,19 @@ abstract class Repository implements RepositoryInterface
         $entityConfig = $this->config->for($entityClass);
 
         $decoded = json_decode($row[$entityConfig->propsColumn]);
-
-        $props = [];
         foreach ($decoded as $column => $value) {
             $propName = $entityConfig->columns[$column] ?? null;
             $propConfig = $entityConfig->getProp($propName);
 
-            if (!empty($propConfig->parent)) {
-                $props[$propName] = $this->get($propConfig->typeClass, $value);
-            }
-            else if (isset($propConfig->converter)) {
-                /** @var BaseConverter $converter */
-                $converter = new $propConfig->converter($this, $entityClass, $propName);
-                $props[$propName] = $converter->convertForPhp($value);
-            }
-            else $props[$propName] = $value;
-
+            $props[$propName] = match(true){
+                default => $value,
+                $propConfig->parent => $this->get($propConfig->typeClass, $value),
+                isset($propConfig->converter) => (new $propConfig->converter($this, $entityClass, $propName))
+                                                    ->convertForPhp($value),
+            };
         }
 
-        return $props;
+        return $props ?? [];
     }
 
 
@@ -100,14 +94,13 @@ abstract class Repository implements RepositoryInterface
         if (isset($this->cache[$entityClass][$primaryValue]))
             return $this->cache[$entityClass][$primaryValue];
 
-        $constructorProps = [];
         foreach ($entityConfig->constructorProps as $propName) {
-            // if for some reason the prop isn't in database, assume it's nullable
+            // if for whatever reason constructor prop isn't in database, assume it's nullable
             $constructorProps[$propName] = $props[$propName] ?? null;
             unset($props[$propName]);
         }
 
-        $entity = new $entityClass(...$constructorProps);
+        $entity = new $entityClass( ...($constructorProps ?? []) );
         foreach ($props as $prop => $value)
             $entity->$prop = $value;
 
@@ -137,22 +130,18 @@ abstract class Repository implements RepositoryInterface
 
             // TODO update props value only if it's "dirty"
 
-            // TODO do this better
-            try { $row = $this->generateDbRow($entity); }
-            catch(\Exception $e) {
-                if(count($entities) > 1) $this->txnRollback();
-                throw $e;
-            }
-
             try {
                 $this->db->update($entityConfig->table)
-                    ->set($row)
+                    ->set( $this->generateDbRow($entity) )
                     ->where($entityConfig->getPrimaryColumn(), $entity->$primaryProp)
                     ->limit(1)
                     ->execute();
-            } catch (AdapterException $e) {
+            }
+            catch (\Exception $e) {
                 if(count($entities) > 1) $this->txnRollback();
-                throw new RepositoryDatabaseException(previous: $e);
+
+                if($e instanceof AdapterException) throw new RepositoryDatabaseException(previous: $e);
+                throw $e; // rethrow the same exception
             }
         }
 
@@ -173,18 +162,15 @@ abstract class Repository implements RepositoryInterface
             $entityConfig = $this->config->for($class);
             $primaryProp = $entityConfig->primaryProp;
 
-            // TODO do this better
-            try { $row = $this->generateDbRow($entity, true); }
-            catch(\Exception $e) {
-                if(count($entities) > 1) $this->txnRollback();
-                throw $e;
-            }
-
             try {
+                $row = $this->generateDbRow($entity, true);
                 $this->db->insert($entityConfig->table, $row);
-            } catch (AdapterException $e) {
+            }
+            catch (\Exception $e) {
                 if(count($entities) > 1) $this->txnRollback();
-                throw new RepositoryDatabaseException(previous: $e);
+
+                if($e instanceof AdapterException) throw new RepositoryDatabaseException(previous: $e);
+                throw $e; // rethrow the same exception
             }
 
             $this->cache[$class][$entity->$primaryProp] = $entity;
@@ -206,34 +192,30 @@ abstract class Repository implements RepositoryInterface
         $entity->onUpdate();
         $isCreation && $entity->onCreate();
 
-        $row = [];
-        $row[$propsColumn] = [];
-
         foreach ($entityConfig->getProps() as $prop => $propConfig) {
             /** @var PropConfig $propConfig */
 
             // property's either not initialized or null, we're not going to store it
             if (!isset($entity->$prop)) continue;
 
-            if (!empty($propConfig->parent)) {
-                $parentPrimaryProp = $this->config->for($propConfig->typeClass)->primaryProp;
-                $value = $entity->$prop->$parentPrimaryProp;
-            }
-            else if (isset($propConfig->converter)) {
-                /** @var BaseConverter $converter */
-                $converter = new $propConfig->converter($this, $class, $prop);
-                $value = $converter->convertForDatabase($entity->$prop);
-            }
-            else $value = $entity->$prop;
+            $value = match(true){
+                default => $entity->$prop,
+
+                $propConfig->parent =>
+                    $entity->$prop->{$this->config->for($propConfig->typeClass)->primaryProp},
+
+                isset($propConfig->converter) =>
+                    (new $propConfig->converter($this, $class, $prop))->convertForDatabase($entity->$prop),
+            };
 
             $validator = new Validator($propConfig->validation);
             $validator->validate($value, $prop);
 
             $row[$propsColumn][$propConfig->column] = $value;
-            if ($propConfig->index) $row[$propConfig->column] = $value;
+            $propConfig->index && $row[$propConfig->column] = $value;
         }
 
-        $row[$propsColumn] = json_encode($row[$propsColumn]);
+        $row[$propsColumn] = json_encode($row[$propsColumn] ?? []);
         return $row;
     }
 
@@ -290,19 +272,18 @@ abstract class Repository implements RepositoryInterface
         return new Query($this, $entityClass);
     }
 
-    public function all(string $entityClass): Query
+    public function all(string $entityClass): Collection
     {
-        return $this->find($entityClass);
+        return $this->find($entityClass)->get();
     }
 
-    // TODO accept array of entities as first param
     public function findChildrenOf(Entity|array $parentEntities, string $childrenEntityClass): Query
     {
         if(!is_array($parentEntities)) $parentEntities = [$parentEntities];
         if(empty($parentEntities)) throw new \Exception('parentEntities cannot be empty');
 
-        $childClassConfig = $this->config->for($childrenEntityClass);
         $conditions = [];
+        $childClassConfig = $this->config->for($childrenEntityClass);
 
         foreach($parentEntities as $parentEntity){
             $parentEntityClass = get_class($parentEntity);
