@@ -1,4 +1,4 @@
-<?php namespace Leven\ORM\Converters;
+<?php namespace Leven\ORM\Converter;
 
 use Leven\ORM\Collection;
 
@@ -19,12 +19,12 @@ class CollectionPrimariesConverter extends BaseConverter
 
         $entityClass = $this->collectionEntityClass ?? $value->getClass();
 
-        $primaryProp = $this->repo->getConfig()->for($entityClass)->primaryProp;
+        $primaryProp = $this->repo->getEntityConfig($entityClass)->primaryProp;
         $collectionPrimaries = implode(';', $value->arrayOfProps($primaryProp));
 
         // if the class is not extended, we need to store the
         // collection entity class name in database, so we can later reconstruct the collection
-        if($this->collectionEntityClass === null)
+        empty($this->collectionEntityClass) and
             $collectionPrimaries = "$entityClass:$collectionPrimaries";
 
         return $collectionPrimaries;
@@ -36,18 +36,13 @@ class CollectionPrimariesConverter extends BaseConverter
 
         $entityClass = $this->collectionEntityClass;
 
-        // if the class is not extended, we need to find the collection entity name
-        if($entityClass === null){
-            $value = explode(':', $value, 2);
-            $entityClass = $value[0];
-            $value = $value[1]; // leave the rest as is
-        }
+        // if the class is not extended, we need to read the collection entity name
+        empty($entityClass) and [$entityClass, $value] = explode(':', $value, 2);
+        empty($value) and $value = [];
 
         $collection = new Collection($entityClass);
-
-        $primaries = empty($value) ? [] : explode(';', $value);
-        foreach ($primaries as $primary)
-            $collection->add($this->repo->get($entityClass, $primary));
+        foreach (explode(';', $value) as $primary)
+            $collection->add( $this->repo->get($entityClass, $primary) );
 
         return $collection;
     }

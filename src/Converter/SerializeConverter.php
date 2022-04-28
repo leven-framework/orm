@@ -1,6 +1,6 @@
 <?php
 
-namespace Leven\ORM\Converters;
+namespace Leven\ORM\Converter;
 
 class SerializeConverter extends BaseConverter
 {

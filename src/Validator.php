@@ -1,7 +1,7 @@
 <?php namespace Leven\ORM;
 
-use Leven\ORM\Attributes\{PropType, ValidationConfig};
-use Leven\ORM\Exceptions\PropertyValidationException as PropValExc;
+use Leven\ORM\Attribute\{PropType, ValidationConfig};
+use Leven\ORM\Exception\PropertyValidationException as PropValExc;
 
 class Validator
 {

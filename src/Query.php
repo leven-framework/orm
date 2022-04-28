@@ -6,8 +6,8 @@ use DomainException;
 use Leven\DBA\Common\AdapterResponse;
 use Leven\DBA\Common\BuilderPart\WhereGroup;
 use Leven\DBA\Common\SelectQueryInterface;
-use Leven\ORM\Attributes\EntityConfig;
-use Leven\ORM\Exceptions\EntityNotFoundException;
+use Leven\ORM\Attribute\EntityConfig;
+use Leven\ORM\Exception\EntityNotFoundException;
 
 final class Query
 {
@@ -59,7 +59,7 @@ final class Query
     public function count(): int
     {
         return $this->execute()->count;
-        // TODO return $this->dbQuery->executeCount();
+        // TODO return $this->dbQuery->executeCount() when I create it
     }
 
     public function get(): Collection
@@ -93,12 +93,12 @@ final class Query
 
     protected function getEntityConfig(): EntityConfig
     {
-        return $this->repo->getConfig()->for($this->class);
+        return $this->repo->getEntityConfig($this->class);
     }
 
     protected function getPropColumn(string $prop): string
     {
-        return $this->getEntityConfig()->getProp($prop)->column
+        return $this->getEntityConfig()->getPropConfig($prop)->column
             ?: throw new DomainException("prop $prop or its column not configured");
     }
 

@@ -2,19 +2,23 @@
 
 namespace Leven\ORM;
 
+use Throwable, DomainException;
 use InvalidArgumentException;
 use Leven\DBA\Common\AdapterInterface;
 use Leven\DBA\Common\BuilderPart\WhereGroup;
-use Leven\ORM\Exceptions\{EntityNotFoundException, PropertyValidationException};
+use Leven\ORM\Exception\{EntityNotFoundException, PropertyValidationException};
+use Leven\ORM\Attribute\EntityConfig;
 
-abstract class Repository implements RepositoryInterface
+class Repository implements RepositoryInterface
 {
+
+    /** @var EntityConfig[] $config */
+    protected array $config;
 
     protected array $cache;
 
     public function __construct(
         protected readonly AdapterInterface $db,
-        protected readonly RepositoryConfig $config = new RepositoryConfig
     )
     {
     }
@@ -24,10 +28,18 @@ abstract class Repository implements RepositoryInterface
         return $this->db;
     }
 
-    public function getConfig(): RepositoryConfig
+    public function getEntityConfig(?string $entityClass): EntityConfig
     {
-        return $this->config;
+        return $this->config[$entityClass] ??
+            throw new DomainException("entity class $entityClass not configured");
     }
+
+    public function addEntityConfig(EntityConfig $config): void
+    {
+        // TODO check if same table name has been added
+        $this->config[$config->class] = $config;
+    }
+
 
 
     /**
@@ -44,7 +56,7 @@ abstract class Repository implements RepositoryInterface
         if (isset($this->cache[$entityClass][$primaryValue]))
             return $this->cache[$entityClass][$primaryValue];
 
-        $entityConfig = $this->config->for($entityClass);
+        $entityConfig = $this->getEntityConfig($entityClass);
 
         $rows = $this->db->select($entityConfig->table)
             ->columns($entityConfig->propsColumn)
@@ -58,56 +70,6 @@ abstract class Repository implements RepositoryInterface
     }
 
 
-    protected function parsePropsFromDbRow(string $entityClass, array $row): array
-    {
-        $entityConfig = $this->config->for($entityClass);
-
-        $decoded = json_decode($row[$entityConfig->propsColumn]);
-        foreach ($decoded as $column => $value) {
-            $propName = $entityConfig->columns[$column] ?? null;
-            $propConfig = $entityConfig->getProp($propName);
-
-            $props[$propName] = match(true){
-                default => $value,
-                $propConfig->parent => $this->get($propConfig->typeClass, $value),
-                isset($propConfig->converter) => (new $propConfig->converter($this, $entityClass, $propName))
-                                                    ->convertForPhp($value),
-            };
-        }
-
-        return $props ?? [];
-    }
-
-
-    protected function spawnEntityFromProps(string $entityClass, array $props): Entity
-    {
-        $entityConfig = $this->config->for($entityClass);
-        $primaryValue = $props[$entityConfig->primaryProp];
-
-        if (isset($this->cache[$entityClass][$primaryValue]))
-            return $this->cache[$entityClass][$primaryValue];
-
-        foreach ($entityConfig->constructorProps as $propName) {
-            // if for whatever reason constructor prop isn't in database, assume it's nullable
-            $constructorProps[$propName] = $props[$propName] ?? null;
-            unset($props[$propName]);
-        }
-
-        $entity = new $entityClass( ...($constructorProps ?? []) );
-        foreach ($props as $prop => $value)
-            $entity->$prop = $value;
-
-        $this->cache[$entityClass][$primaryValue] = $entity;
-
-        return $entity;
-    }
-
-    public function spawnEntityFromDbRow(string $entityClass, array $row): Entity
-    {
-        $props = $this->parsePropsFromDbRow($entityClass, $row);
-        return $this->spawnEntityFromProps($entityClass, $props);
-    }
-
     /**
      * @throws PropertyValidationException
      */
@@ -117,7 +79,7 @@ abstract class Repository implements RepositoryInterface
 
         foreach($entities as $entity) {
             $class = get_class($entity);
-            $entityConfig = $this->config->for($class);
+            $entityConfig = $this->getEntityConfig($class);
             $primaryProp = $entityConfig->primaryProp;
 
             // TODO update props value only if it's "dirty"
@@ -129,7 +91,7 @@ abstract class Repository implements RepositoryInterface
                     ->limit(1)
                     ->execute();
             }
-            catch (\Exception $e) {
+            catch (Throwable $e) {
                 if(count($entities) > 1) $this->txnRollback();
                 throw $e;
             }
@@ -148,14 +110,14 @@ abstract class Repository implements RepositoryInterface
 
         foreach($entities as $entity) {
             $class = get_class($entity);
-            $entityConfig = $this->config->for($class);
+            $entityConfig = $this->getEntityConfig($class);
             $primaryProp = $entityConfig->primaryProp;
 
             try {
                 $row = $this->generateDbRow($entity, true);
                 $this->db->insert($entityConfig->table, $row);
             }
-            catch (\Exception $e) {
+            catch (Throwable $e) {
                 if(count($entities) > 1) $this->txnRollback();
                 throw $e;
             }
@@ -167,52 +129,15 @@ abstract class Repository implements RepositoryInterface
         return $this;
     }
 
-    /**
-     * @throws PropertyValidationException
-     */
-    protected function generateDbRow(Entity $entity, $isCreation = false): array
-    {
-        $class = get_class($entity);
-        $entityConfig = $this->config->for($class);
-        $propsColumn = $entityConfig->propsColumn;
-
-        $entity->onUpdate();
-        $isCreation && $entity->onCreate();
-
-        foreach ($entityConfig->getProps() as $prop => $propConfig) {
-            // property's either not initialized or null, we're not going to store it
-            if (!isset($entity->$prop)) continue;
-
-            $value = match(true){
-                default => $entity->$prop,
-
-                $propConfig->parent =>
-                    $entity->$prop->{$this->config->for($propConfig->typeClass)->primaryProp},
-
-                isset($propConfig->converter) =>
-                    (new $propConfig->converter($this, $class, $prop))->convertForDatabase($entity->$prop),
-            };
-
-            $validator = new Validator($propConfig->validation);
-            $validator->validate($value, $prop);
-
-            $row[$propsColumn][$propConfig->column] = $value;
-            $propConfig->index && $row[$propConfig->column] = $value;
-        }
-
-        $row[$propsColumn] = json_encode($row[$propsColumn] ?? []);
-        return $row;
-    }
-
 
     /**
      * @throws EntityNotFoundException
      */
     public function delete(string $entityClass, string $primaryValue): static
     {
-        $entityConfig = $this->config->for($entityClass);
+        $entityConfig = $this->getEntityConfig($entityClass);
 
-        foreach($this->config->getStore() as $childEntityClass => $childEntityConfig)
+        foreach($this->config as $childEntityClass => $childEntityConfig)
             if(isset($childEntityConfig->parentColumns[$entityClass])) {
                 $childPrimaryColumn = $childEntityConfig->getPrimaryColumn();
 
@@ -245,12 +170,13 @@ abstract class Repository implements RepositoryInterface
     public function deleteEntity(Entity $entity): static
     {
         $entityClass = get_class($entity);
-        $primaryValue = $entity->{$this->config->for($entityClass)->primaryProp};
+        $primaryValue = $entity->{$this->getEntityConfig($entityClass)->primaryProp};
         $this->delete($entityClass, $primaryValue);
         unset($entity);
 
         return $this;
     }
+
 
     public function find(string $entityClass): Query
     {
@@ -262,17 +188,18 @@ abstract class Repository implements RepositoryInterface
         return $this->find($entityClass)->get();
     }
 
+
     public function findChildrenOf(Entity|array $parentEntities, string $childrenEntityClass): Query
     {
         if(!is_array($parentEntities)) $parentEntities = [$parentEntities];
         if(empty($parentEntities)) throw new InvalidArgumentException('parentEntities cannot be empty');
 
         $conditions = [];
-        $childClassConfig = $this->config->for($childrenEntityClass);
+        $childClassConfig = $this->getEntityConfig($childrenEntityClass);
 
         foreach($parentEntities as $parentEntity){
             $parentEntityClass = get_class($parentEntity);
-            $parentClassConfig = $this->config->for($parentEntityClass);
+            $parentClassConfig = $this->getEntityConfig($parentEntityClass);
 
             $conditions[$childClassConfig->parentColumns[$parentEntityClass]] =
                 $parentEntity->{$parentClassConfig->primaryProp};
@@ -301,6 +228,98 @@ abstract class Repository implements RepositoryInterface
     public function txnRollback()
     {
         $this->db->txnRollback();
+    }
+
+
+
+    // INTERNAL METHODS
+
+    public function spawnEntityFromDbRow(string $entityClass, array $row): Entity
+    {
+        $props = $this->parsePropsFromDbRow($entityClass, $row);
+        return $this->spawnEntityFromProps($entityClass, $props);
+    }
+
+    protected function parsePropsFromDbRow(string $entityClass, array $row): array
+    {
+        $entityConfig = $this->getEntityConfig($entityClass);
+
+        $decoded = json_decode($row[$entityConfig->propsColumn]);
+        foreach ($decoded as $column => $value) {
+            $propName = $entityConfig->columns[$column] ?? null;
+            $propConfig = $entityConfig->getPropConfig($propName);
+
+            $props[$propName] = match(true){
+                default => $value,
+                $propConfig->parent => $this->get($propConfig->typeClass, $value),
+                isset($propConfig->converter) => (new $propConfig->converter($this, $entityClass, $propName))
+                    ->convertForPhp($value),
+            };
+        }
+
+        return $props ?? [];
+    }
+
+
+    protected function spawnEntityFromProps(string $entityClass, array $props): Entity
+    {
+        $entityConfig = $this->getEntityConfig($entityClass);
+        $primaryValue = $props[$entityConfig->primaryProp];
+
+        if (isset($this->cache[$entityClass][$primaryValue]))
+            return $this->cache[$entityClass][$primaryValue];
+
+        foreach ($entityConfig->constructorProps as $propName) {
+            // if for whatever reason constructor prop isn't in database, assume it's nullable
+            $constructorProps[$propName] = $props[$propName] ?? null;
+            unset($props[$propName]);
+        }
+
+        $entity = new $entityClass( ...($constructorProps ?? []) );
+        foreach ($props as $prop => $value)
+            $entity->$prop = $value;
+
+        $this->cache[$entityClass][$primaryValue] = $entity;
+
+        return $entity;
+    }
+
+
+    /**
+     * @throws PropertyValidationException
+     */
+    protected function generateDbRow(Entity $entity, $isCreation = false): array
+    {
+        $class = get_class($entity);
+        $entityConfig = $this->getEntityConfig($class);
+        $propsColumn = $entityConfig->propsColumn;
+
+        $entity->onUpdate();
+        $isCreation && $entity->onCreate();
+
+        foreach ($entityConfig->getProps() as $prop => $propConfig) {
+            // property's either not initialized or null, we're not going to store it
+            if (!isset($entity->$prop)) continue;
+
+            $value = match(true){
+                default => $entity->$prop,
+
+                $propConfig->parent =>
+                $entity->$prop->{$this->getEntityConfig($propConfig->typeClass)->primaryProp},
+
+                isset($propConfig->converter) =>
+                (new $propConfig->converter($this, $class, $prop))->convertForDatabase($entity->$prop),
+            };
+
+            $validator = new Validator($propConfig->validation);
+            $validator->validate($value, $prop);
+
+            $row[$propsColumn][$propConfig->column] = $value;
+            $propConfig->index && $row[$propConfig->column] = $value;
+        }
+
+        $row[$propsColumn] = json_encode($row[$propsColumn] ?? []);
+        return $row;
     }
 
 }

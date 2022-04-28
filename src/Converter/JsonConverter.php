@@ -1,8 +1,8 @@
 <?php
 
-namespace Leven\ORM\Converters;
+namespace Leven\ORM\Converter;
 
-use Leven\ORM\Exceptions\PropertyValidationException;
+use Leven\ORM\Exception\PropertyValidationException;
 
 class JsonConverter extends BaseConverter
 {

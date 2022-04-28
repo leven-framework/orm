@@ -1,3 +1,3 @@
-<?php namespace Leven\ORM\Exceptions;
+<?php namespace Leven\ORM\Exception;
 
 class PropertyValidationException extends \UnexpectedValueException {}

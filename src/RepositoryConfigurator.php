@@ -2,31 +2,16 @@
 
 namespace Leven\ORM;
 
-use DomainException;
-use Leven\ORM\Attributes\{EntityConfig, PropConfig, ValidationConfig};
 use ReflectionClass, ReflectionException, ReflectionProperty, ReflectionNamedType;
+use Leven\ORM\Attribute\{EntityConfig, PropConfig, ValidationConfig};
 
-class RepositoryConfig
+class RepositoryConfigurator
 {
 
-    private array $store;
-
-
-    /**
-     * @return array
-     */
-    public function getStore(): array
+    public function __construct(
+        public RepositoryInterface $repo,
+    )
     {
-        return $this->store;
-    }
-
-
-    public function for(?string $entityClass): EntityConfig
-    {
-        if(!isset($this->store[$entityClass]))
-            throw new DomainException("entity class $entityClass not recognized");
-
-        return $this->store[$entityClass];
     }
 
     /**
@@ -67,7 +52,7 @@ class RepositoryConfig
             $entityConfig->addProp($propConfig);
         }
 
-        $this->store[$entityClass] = $entityConfig;
+        $this->repo->addEntityConfig($entityConfig);
     }
 
     /**

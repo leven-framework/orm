@@ -15,8 +15,7 @@ class Collection implements IteratorAggregate
         Entity ...$entities
     )
     {
-        foreach($entities as $entity)
-            $this->add($entity);
+        foreach($entities as $entity) $this->add($entity);
     }
 
     public function getClass(): string
@@ -35,14 +34,13 @@ class Collection implements IteratorAggregate
             throw new InvalidArgumentException("object is not instance of $this->class");
 
         $this->store[] = $entity;
-
         return $this;
     }
 
-    public function reject(callable $callback): static
+    public function reject(callable $callback, bool $invert = false): static
     {
         foreach($this->store as $index => $entity)
-            if($callback($entity) === true)
+            if($callback($entity) === !$invert)
                 unset($this->store[$index]);
 
         return $this;
@@ -55,8 +53,7 @@ class Collection implements IteratorAggregate
 
     public function arrayOfProps($propName): array
     {
-        foreach($this->store as $entity)
-            $out[] = $entity->$propName;
+        foreach($this->store as $entity) $out[] = $entity->$propName;
         return $out ?? [];
     }
 

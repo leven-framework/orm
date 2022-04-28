@@ -1,6 +1,6 @@
 <?php
 
-namespace Leven\ORM\Attributes;
+namespace Leven\ORM\Attribute;
 
 enum PropType
 {

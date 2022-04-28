@@ -1,4 +1,4 @@
-<?php namespace Leven\ORM\Converters;
+<?php namespace Leven\ORM\Converter;
 
 use DateTime;
 

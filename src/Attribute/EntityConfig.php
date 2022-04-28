@@ -1,29 +1,42 @@
 <?php
 
-namespace Leven\ORM\Attributes;
+namespace Leven\ORM\Attribute;
 
 use Attribute;
-use Leven\ORM\Exceptions\EntityNotFoundException;
+use DomainException;
+use Leven\ORM\Exception\EntityNotFoundException;
 
 #[Attribute(Attribute::TARGET_CLASS)]
 class EntityConfig
 {
 
-    public string $class;
+    public readonly string $class;
 
     /** @var PropConfig[] $props */
     private array $props = [];
-    public string $primaryProp;
+
+    public readonly string $primaryProp;
+
     public array $columns = [];
     public array $parentColumns = [];
     public array $constructorProps = [];
 
     public function __construct(
         public ?string $table = null,
-        public string $propsColumn = 'props',
-        public string $notFoundException = EntityNotFoundException::class
+        public readonly string $propsColumn = 'props',
+        public readonly string $notFoundException = EntityNotFoundException::class
     )
     {
+    }
+
+    public function generateTable(string $class): void
+    {
+        $this->table = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $class));
+    }
+
+    public function getProps(): array
+    {
+        return $this->props;
     }
 
     public function addProp(PropConfig $prop): void
@@ -36,27 +49,16 @@ class EntityConfig
         if($prop->parent) $this->parentColumns[$prop->typeClass] = $prop->column;
     }
 
-    public function getProp(?string $name): PropConfig
+    public function getPropConfig(?string $name): PropConfig
     {
-        if(!isset($this->props[$name]))
-            throw new \Exception("prop $name does not exist");
-
-        return $this->props[$name];
+        return $this->props[$name] ??
+            throw new DomainException("prop $name not configured in entity");
     }
 
-    public function getProps(): array
-    {
-        return $this->props;
-    }
 
     public function getPrimaryColumn(): string
     {
         return $this->props[$this->primaryProp]->column;
-    }
-
-    public function generateTable(string $class): void
-    {
-        $this->table = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $class));
     }
 
 }

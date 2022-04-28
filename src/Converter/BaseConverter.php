@@ -1,8 +1,8 @@
 <?php
 
-namespace Leven\ORM\Converters;
+namespace Leven\ORM\Converter;
 
-use Leven\ORM\Attributes\PropConfig;
+use Leven\ORM\Attribute\PropConfig;
 use Leven\ORM\RepositoryInterface;
 
 abstract class BaseConverter
@@ -18,7 +18,7 @@ abstract class BaseConverter
 
     final protected function getPropConfig(): PropConfig
     {
-        return $this->repo->getConfig()->for($this->entityClass)->getProp($this->propName);
+        return $this->repo->getEntityConfig($this->entityClass)->getPropConfig($this->propName);
     }
 
     abstract public function convertForDatabase($value): null|bool|string|int|float;
