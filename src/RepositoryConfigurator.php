@@ -28,7 +28,7 @@ class RepositoryConfigurator
         $attribute = $classReflection->getAttributes(EntityConfig::class)[0] ?? null;
         $entityConfig = $attribute?->getArguments()[0] ?? new EntityConfig();
 
-        $entityConfig->name = $entityClass;
+        $entityConfig->class = $entityClass;
         empty($entityConfig->table) && $entityConfig->generateTable($classReflection->getShortName());
 
         foreach ($classReflection->getProperties(ReflectionProperty::IS_PUBLIC) as $prop) {

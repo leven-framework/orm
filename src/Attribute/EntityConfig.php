@@ -10,7 +10,7 @@ use Leven\ORM\Exception\EntityNotFoundException;
 class EntityConfig
 {
 
-    public readonly string $class;
+    public string $class;
 
     /** @var PropConfig[] $props */
     private array $props = [];
