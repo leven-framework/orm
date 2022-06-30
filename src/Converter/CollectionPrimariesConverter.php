@@ -20,7 +20,7 @@ class CollectionPrimariesConverter extends BaseConverter
         $entityClass = $this->collectionEntityClass ?? $value->getClass();
 
         $primaryProp = $this->repo->getEntityConfig($entityClass)->primaryProp;
-        $collectionPrimaries = implode(';', $value->arrayOfProps($primaryProp));
+        $collectionPrimaries = implode(';', $value->map( fn ($entity) => $entity->$primaryProp) );
 
         // if the class is not extended, we need to store the
         // collection entity class name in database, so we can later reconstruct the collection

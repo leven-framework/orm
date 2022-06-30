@@ -37,24 +37,42 @@ class Collection implements IteratorAggregate
         return $this;
     }
 
-    public function reject(callable $callback, bool $invert = false): static
+    public function filter(callable $callback): static
     {
-        foreach($this->store as $index => $entity)
-            if($callback($entity) === !$invert)
-                unset($this->store[$index]);
+        $collection = clone $this;
+        $collection->store = array_filter($collection->store, $callback);
+        return $collection;
+    }
 
+    public function reject(callable $callback): static
+    {
+        return $this->filter( fn ($entity) => !$callback($entity) );
+    }
+
+    public function each(callable $callback): static
+    {
+        foreach($this->store as $entity) $callback($entity);
         return $this;
+    }
+
+    public function map(callable $callback): array
+    {
+        return array_map($callback, $this->store);
+    }
+
+    public function empty(): bool
+    {
+        return empty($this->store);
+    }
+
+    public function count(): int
+    {
+        return count($this->store);
     }
 
     public function array(): array
     {
         return $this->store;
-    }
-
-    public function arrayOfProps($propName): array
-    {
-        foreach($this->store as $entity) $out[] = $entity->$propName;
-        return $out ?? [];
     }
 
 }
