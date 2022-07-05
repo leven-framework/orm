@@ -250,10 +250,17 @@ class Repository implements RepositoryInterface
             $propConfig = $entityConfig->getPropConfig($propName);
 
             $props[$propName] = match(true){
+                isset($propConfig->converter) =>
+                (new $propConfig->converter($this, $entityClass, $propName))->convertForPhp($value),
+
+                // after converter because null may be converted to some other value
+                $value === null => null,
+
+                // after null because the entity might not have this parent
+                $propConfig->parent =>
+                $this->get($propConfig->typeClass, $value),
+
                 default => $value,
-                $propConfig->parent => $this->get($propConfig->typeClass, $value),
-                isset($propConfig->converter) => (new $propConfig->converter($this, $entityClass, $propName))
-                    ->convertForPhp($value),
             };
         }
 
@@ -298,17 +305,16 @@ class Repository implements RepositoryInterface
         $isCreation && $entity->onCreate();
 
         foreach ($entityConfig->getProps() as $prop => $propConfig) {
-            // property's either not initialized or null, we're not going to store it
-            if (!isset($entity->$prop)) continue;
-
             $value = match(true){
-                default => $entity->$prop,
+                isset($propConfig->converter) =>
+                (new $propConfig->converter($this, $class, $prop))->convertForDatabase($entity->$prop),
+
+                !isset($entity->$prop) => null,
 
                 $propConfig->parent =>
                 $entity->$prop->{$this->getEntityConfig($propConfig->typeClass)->primaryProp},
 
-                isset($propConfig->converter) =>
-                (new $propConfig->converter($this, $class, $prop))->convertForDatabase($entity->$prop),
+                default => $entity->$prop,
             };
 
             $validator = new Validator($propConfig->validation);

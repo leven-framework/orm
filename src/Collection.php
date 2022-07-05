@@ -60,6 +60,15 @@ class Collection implements IteratorAggregate
         return array_map($callback, $this->store);
     }
 
+    public function mapAssoc(callable $callback): array
+    {
+        foreach($this->store as $entity) {
+            [$key, $value] = $callback($entity);
+            $out[$key] = $value;
+        }
+        return $out ?? [];
+    }
+
     public function empty(): bool
     {
         return empty($this->store);
