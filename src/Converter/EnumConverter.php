@@ -10,7 +10,8 @@ class EnumConverter extends BaseConverter
 
     public function convertForDatabase($value): ?string
     {
-        return $value?->name;
+        if($value === null) return null;
+        return strtolower($value->name);
     }
 
     public function convertForPhp($value): ?UnitEnum
@@ -18,7 +19,7 @@ class EnumConverter extends BaseConverter
         if($value === null) return null;
 
         foreach(($this->getPropConfig()->typeClass)::cases() as $case)
-            if($case->name === $value)
+            if($value === strtolower($case->name))
                 return $case;
 
         throw new PropertyValidationException("can't convert $this->propName to enum, case doesn't exist");
