@@ -77,6 +77,7 @@ final class Query
 
     public function tryFirst(): ?Entity
     {
+        $this->dbQuery->limit(1);
         $rows = $this->execute()->rows;
         if(!isset($rows[0])) return null;
 
