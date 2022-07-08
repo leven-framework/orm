@@ -57,16 +57,16 @@ class Repository implements RepositoryInterface
             return $this->cache[$entityClass][$primaryValue];
 
         $entityConfig = $this->getEntityConfig($entityClass);
+        $primaryColumn = $entityConfig->getPrimaryColumn();
 
         $rows = $this->db->select($entityConfig->table)
-            ->columns($entityConfig->propsColumn)
-            ->where($entityConfig->getPrimaryColumn(), $primaryValue)
+            ->columns($primaryColumn, $entityConfig->propsColumn)
+            ->where($primaryColumn, $primaryValue)
             ->limit(1)
             ->execute()->rows;
 
         if(!isset($rows[0])) return null;
-        $props = $this->parsePropsFromDbRow($entityClass, $rows[0]);
-        return $this->spawnEntityFromProps($entityClass, $props);
+        return $this->spawnEntityFromDbRow($entityClass, $rows[0]);
     }
 
 
@@ -124,6 +124,7 @@ class Repository implements RepositoryInterface
 
             if(!isset($entity->$primaryProp) && $result->lastId !== null) {
                 $entity->$primaryProp = $result->lastId;
+                $this->update($entity);
             }
 
             $this->cache[$class][$entity->$primaryProp] = $entity;
@@ -248,27 +249,27 @@ class Repository implements RepositoryInterface
     {
         $entityConfig = $this->getEntityConfig($entityClass);
 
-        $decoded = json_decode($row[$entityConfig->propsColumn]);
-        foreach ($decoded as $column => $value) {
-            $propName = $entityConfig->columns[$column] ?? null;
+        $props[$entityConfig->primaryProp] = $row[$entityConfig->getPrimaryColumn()];
+
+        foreach (json_decode($row[$entityConfig->propsColumn]) as $column => $value) {
+            $propName = $entityConfig->columns[$column] ?? null; // so the next line fails
             $propConfig = $entityConfig->getPropConfig($propName);
 
             $props[$propName] = match(true){
                 isset($propConfig->converter) =>
-                (new $propConfig->converter($this, $entityClass, $propName))->convertForPhp($value),
+                    (new $propConfig->converter($this, $entityClass, $propName))->convertForPhp($value),
 
                 // after converter because null may be converted to some other value
                 $value === null => null,
 
                 // after null because the entity might not have this parent
-                $propConfig->parent =>
-                $this->get($propConfig->typeClass, $value),
+                $propConfig->parent => $this->get($propConfig->typeClass, $value),
 
                 default => $value,
             };
         }
 
-        return $props ?? [];
+        return $props;
     }
 
 
@@ -311,12 +312,12 @@ class Repository implements RepositoryInterface
         foreach ($entityConfig->getProps() as $prop => $propConfig) {
             $value = match(true){
                 isset($propConfig->converter) =>
-                (new $propConfig->converter($this, $class, $prop))->convertForDatabase($entity->$prop),
+                    (new $propConfig->converter($this, $class, $prop))->convertForDatabase($entity->$prop),
 
                 !isset($entity->$prop) => null,
 
                 $propConfig->parent =>
-                $entity->$prop->{$this->getEntityConfig($propConfig->typeClass)->primaryProp},
+                    $entity->$prop->{$this->getEntityConfig($propConfig->typeClass)->primaryProp},
 
                 default => $entity->$prop,
             };
@@ -324,7 +325,7 @@ class Repository implements RepositoryInterface
             $validator = new Validator($propConfig->validation);
             $validator->validate($value, $prop);
 
-            $row[$propsColumn][$propConfig->column] = $value;
+            $propConfig->primary || $row[$propsColumn][$propConfig->column] = $value;
             $propConfig->index && $row[$propConfig->column] = $value;
         }
 

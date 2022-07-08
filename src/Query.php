@@ -19,9 +19,11 @@ final class Query
         protected RepositoryInterface $repo,
         protected string $class
     ){
+        $entityConfig = $this->getEntityConfig();
+
         $this->dbQuery = $this->repo->getDb()
-            ->select($this->getEntityConfig()->table)
-            ->columns($this->getEntityConfig()->propsColumn)
+            ->select($entityConfig->table)
+            ->columns($entityConfig->getPrimaryColumn(), $entityConfig->propsColumn)
         ;
 
         // we'll be putting all user conditions in this group
