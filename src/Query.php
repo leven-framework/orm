@@ -4,6 +4,7 @@ namespace Leven\ORM;
 
 use DomainException;
 use Leven\DBA\Common\AdapterResponse;
+use Leven\DBA\Common\BuilderPart\DefaultValue;
 use Leven\DBA\Common\BuilderPart\WhereGroup;
 use Leven\DBA\Common\SelectQueryInterface;
 use Leven\ORM\Attribute\EntityConfig;
@@ -50,7 +51,7 @@ final class Query
         return $this;
     }
 
-    public function where(string $prop, $valueOrOperator, $value = []): Query
+    public function where(string $prop, $valueOrOperator, $value = new DefaultValue): Query
     {
         $this->conditions->where($this->getPropColumn($prop), $valueOrOperator, $value);
         return $this;
@@ -66,10 +67,7 @@ final class Query
 
     public function get(): Collection
     {
-        foreach ($this->execute()->rows as $row)
-            $entities[] = $this->repo->spawnEntityFromDbRow($this->class, $row);
-
-        return new Collection($this->class, ...($entities ?? []));
+        return new Collection($this->class, ...$this->repo->spawnEntitiesFromDbRows($this->class, $this->execute()->rows));
     }
 
     public function getFirst(): Entity

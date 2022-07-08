@@ -41,5 +41,6 @@ interface RepositoryInterface
     public function txnRollback();
 
     public function spawnEntityFromDbRow(string $entityClass, array $row): Entity;
+    public function spawnEntitiesFromDbRows(string $entityClass, array $rows): array;
 
 }

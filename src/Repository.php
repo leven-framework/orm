@@ -245,13 +245,37 @@ class Repository implements RepositoryInterface
         return $this->spawnEntityFromProps($entityClass, $props);
     }
 
-    protected function parsePropsFromDbRow(string $entityClass, array $row): array
+    public function spawnEntitiesFromDbRows(string $entityClass, array $rows): array
     {
         $entityConfig = $this->getEntityConfig($entityClass);
 
-        $props[$entityConfig->primaryProp] = $row[$entityConfig->getPrimaryColumn()];
+        foreach($rows as &$row){
+            $row[$entityConfig->propsColumn] = json_decode($row[$entityConfig->propsColumn]);
+            foreach($row[$entityConfig->propsColumn] as $column => $value){
+                $propName = $entityConfig->columns[$column] ?? null; // so the next line fails
+                $propConfig = $entityConfig->getPropConfig($propName);
 
-        foreach (json_decode($row[$entityConfig->propsColumn]) as $column => $value) {
+                if($propConfig->parent) $parents[$propConfig->typeClass][] = $value;
+            }
+        }
+
+        foreach ($parents ?? [] as $parentClass => $parentPrimaries)
+            (new Query($this, $parentClass))
+                ->where($this->getEntityConfig($parentClass)->primaryProp, 'IN', $parentPrimaries)
+                ->get();
+
+        return array_map( fn($row) => $this->spawnEntityFromDbRow($entityClass, $row), $rows );
+    }
+
+    protected function parsePropsFromDbRow(string $entityClass, array $row): array
+    {
+        $entityConfig = $this->getEntityConfig($entityClass);
+        $propsColumn = $entityConfig->propsColumn;
+
+        $props[$entityConfig->primaryProp] = $row[$entityConfig->getPrimaryColumn()];
+        $props[$propsColumn] = is_string($row[$propsColumn]) ? json_decode($row[$propsColumn]) : $row[$propsColumn];
+
+        foreach ($props[$propsColumn] as $column => $value) {
             $propName = $entityConfig->columns[$column] ?? null; // so the next line fails
             $propConfig = $entityConfig->getPropConfig($propName);
 
