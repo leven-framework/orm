@@ -115,11 +115,15 @@ class Repository implements RepositoryInterface
 
             try {
                 $row = $this->generateDbRow($entity, true);
-                $this->db->insert($entityConfig->table, $row);
+                $result = $this->db->insert($entityConfig->table, $row);
             }
             catch (Throwable $e) {
                 if(count($entities) > 1) $this->txnRollback();
                 throw $e;
+            }
+
+            if(!isset($entity->$primaryProp) && $result->lastId !== null) {
+                $entity->$primaryProp = $result->lastId;
             }
 
             $this->cache[$class][$entity->$primaryProp] = $entity;
