@@ -247,17 +247,19 @@ class Repository implements RepositoryInterface
         foreach ($result->rows as $row){
             $props = json_decode($row[$config->propsColumn]);
 
-            foreach ($config->getProps() as $prop => $propConfig)
+            foreach ($config->getProps() as $prop => $propConfig) {
+                $value = $props->{$propConfig->column};
                 $entity[$prop] = match (true) {
-                    !isset($props->$prop) => null, // TODO implement default value
+                    !isset($value) => null, // TODO implement default value
                     isset($propConfig->converter) =>
-                        (new $propConfig->converter($this, $config->class, $prop))->convertForPhp($props->$prop),
-                    $props->$prop === null => null,
+                        (new $propConfig->converter($this, $config->class, $prop))->convertForPhp($value),
+                    $value === null => null,
                     $propConfig->parent => ($result->count == 1) ?
-                        $this->get($propConfig->typeClass, $props->$prop) : // if single entity, fetch parents directly
-                        $parents[$propConfig->typeClass][] = $props->$prop, // or fetch all parents together later
-                    default => $props->$prop,
+                        $this->get($propConfig->typeClass, $value) : // if single entity, fetch parents directly
+                        $parents[$propConfig->typeClass][] = $value, // or fetch all parents together later
+                    default => $value,
                 };
+            }
 
             // set primary after because it would be overwritten by the above loop
             $entity[$config->primaryProp] = $row[$config->getPrimaryColumn()];
