@@ -4,6 +4,7 @@ namespace Leven\ORM;
 
 use Leven\DBA\Common\AdapterInterface;
 use Leven\ORM\Exception\{EntityNotFoundException, PropertyValidationException};
+use Leven\DBA\Common\AdapterResponse;
 use Leven\ORM\Attribute\EntityConfig;
 
 interface RepositoryInterface
@@ -39,5 +40,7 @@ interface RepositoryInterface
     public function txnBegin();
     public function txnCommit();
     public function txnRollback();
+
+    public function generateEntities(EntityConfig $config, AdapterResponse $result): array;
 
 }

@@ -243,9 +243,8 @@ class Repository implements RepositoryInterface
     {
         if (!$result->count) return [];
 
+        $entities = []; // because foreach ($entities ?? [] as &$entity) doesn't work as expected
         foreach ($result->rows as $row){
-            $entity[$config->primaryProp] = $row[$config->getPrimaryColumn()];
-
             foreach (json_decode($row[$config->propsColumn]) as $column => $value) {
                 $propConfig = $config->getPropConfig($config->columns[$column] ?? null);
 
@@ -260,20 +259,20 @@ class Repository implements RepositoryInterface
                     default => $value,
                 };
             }
-
+            $entity[$config->primaryProp] = $row[$config->getPrimaryColumn()];
             $entities[] = $entity;
         }
 
-        if (empty($parents)) return array_map( fn($e) => $this->constructFromProps($config, $e), $entities ?? []);
+        if (empty($parents)) return array_map( fn($e) => $this->constructFromProps($config, $e), $entities);
 
         foreach ($parents as $class => $primaries) (new Query($this, $class))
             ->where($this->getEntityConfig($class)->primaryProp, 'IN', array_unique($primaries))->get();
 
         foreach ($config->getProps() as $propConfig)
-            if ($propConfig->parent) foreach ($entities ?? [] as &$entity)
+            if ($propConfig->parent) foreach ($entities as &$entity)
                 $entity[$propConfig->name] = $this->get($propConfig->typeClass, $entity[$propConfig->name]);
 
-        return array_map( fn($e) => $this->constructFromProps($config, $e), $entities ?? [] );
+        return array_map( fn($e) => $this->constructFromProps($config, $e), $entities );
     }
 
     protected function constructFromProps(EntityConfig $config, array $props): Entity
