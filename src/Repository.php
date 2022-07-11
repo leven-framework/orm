@@ -248,9 +248,9 @@ class Repository implements RepositoryInterface
             $props = json_decode($row[$config->propsColumn]);
 
             foreach ($config->getProps() as $prop => $propConfig) {
-                $value = $props->{$propConfig->column};
+                $value = $props->{$propConfig->column} ?? null;
                 $entity[$prop] = match (true) {
-                    !isset($value) => null, // TODO implement default value
+                    !isset($props->{$propConfig->column}) => null, // TODO implement default value
                     isset($propConfig->converter) =>
                         (new $propConfig->converter($this, $config->class, $prop))->convertForPhp($value),
                     $value === null => null,
