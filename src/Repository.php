@@ -243,9 +243,8 @@ class Repository implements RepositoryInterface
     {
         if (!$result->count) return [];
 
-        $entities = []; // because foreach ($entities ?? [] as &$entity) doesn't work as expected
+        $entities = []; // because `foreach ($entities ?? [] as &$entity)` doesn't work as expected
         foreach ($result->rows as $row){
-            $entity[$config->primaryProp] = $row[$config->getPrimaryColumn()];
             $props = json_decode($row[$config->propsColumn]);
 
             foreach ($config->getProps() as $prop => $propConfig)
@@ -260,6 +259,8 @@ class Repository implements RepositoryInterface
                     default => $props->$prop,
                 };
 
+            // set primary after because it would be overwritten by the above loop
+            $entity[$config->primaryProp] = $row[$config->getPrimaryColumn()];
             $entities[] = $entity;
         }
 
