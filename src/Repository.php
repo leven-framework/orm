@@ -245,21 +245,21 @@ class Repository implements RepositoryInterface
 
         $entities = []; // because foreach ($entities ?? [] as &$entity) doesn't work as expected
         foreach ($result->rows as $row){
-            foreach (json_decode($row[$config->propsColumn]) as $column => $value) {
-                $propConfig = $config->getPropConfig($config->columns[$column] ?? null);
-
-                isset($propConfig->converter) &&
-                    $converter = new $propConfig->converter($this, $config->class, $propConfig->name);
-
-                $entity[$propConfig->name] = match(true){
-                    isset($converter) => $converter->convertForPhp($value),
-                    $value === null => null,
-                    $propConfig->parent && $result->count > 1 => $parents[$propConfig->typeClass][] = $value,
-                    $propConfig->parent && $result->count == 1 => $this->get($propConfig->typeClass, $value),
-                    default => $value,
-                };
-            }
             $entity[$config->primaryProp] = $row[$config->getPrimaryColumn()];
+            $props = json_decode($row[$config->propsColumn]);
+
+            foreach ($config->getProps() as $prop => $propConfig)
+                $entity[$prop] = match (true) {
+                    !isset($props->$prop) => null, // TODO implement default value
+                    isset($propConfig->converter) =>
+                        (new $propConfig->converter($this, $config->class, $prop))->convertForPhp($props->$prop),
+                    $props->$prop === null => null,
+                    $propConfig->parent => ($result->count == 1) ?
+                        $this->get($propConfig->typeClass, $props->$prop) : // if single entity, fetch parents directly
+                        $parents[$propConfig->typeClass][] = $props->$prop, // or fetch all parents together later
+                    default => $props->$prop,
+                };
+
             $entities[] = $entity;
         }
 
@@ -307,12 +307,12 @@ class Repository implements RepositoryInterface
         $isCreation && $entity->onCreate();
 
         foreach ($entityConfig->getProps() as $prop => $propConfig) {
-            isset($propConfig->converter) && $converter = new $propConfig->converter($this, $class, $prop);
-
             $value = match(true){
-                isset($converter) => $converter->convertForDatabase($entity->$prop),
+                isset($propConfig->converter) =>
+                    (new $propConfig->converter($this, $class, $prop))->convertForDatabase($entity->$prop),
                 !isset($entity->$prop) => null,
-                $propConfig->parent => $entity->$prop->{$this->getEntityConfig($propConfig->typeClass)->primaryProp},
+                $propConfig->parent =>
+                    $entity->$prop->{$this->getEntityConfig($propConfig->typeClass)->primaryProp},
                 default => $entity->$prop,
             };
 
