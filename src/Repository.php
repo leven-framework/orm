@@ -269,9 +269,9 @@ class Repository implements RepositoryInterface
         foreach ($parents as $class => $primaries) (new Query($this, $class))
             ->where($this->getEntityConfig($class)->primaryProp, 'IN', array_unique($primaries))->get();
 
-        foreach ($config->getProps() as $propConfig)
-            if ($propConfig->parent) foreach ($entities as &$entity)
-                $entity[$propConfig->name] = $this->get($propConfig->typeClass, $entity[$propConfig->name]);
+        foreach ($config->getProps() as $prop => $propConfig) if ($propConfig->parent)
+                foreach ($entities as &$entity) if($entity[$prop] !== null)
+                    $entity[$prop] = $this->get($propConfig->typeClass, $entity[$prop]);
 
         return array_map( fn($e) => $this->constructFromProps($config, $e), $entities );
     }
