@@ -11,7 +11,7 @@ abstract class Entity
      * @throws InvalidArgumentException when an undefined property is attempted to be set
      */
     public function __set($name, $value){
-        throw new InvalidArgumentException("property $name does not exist");
+        throw new InvalidArgumentException("property '$name' not defined");
     }
 
     /**

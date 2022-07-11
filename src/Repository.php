@@ -261,8 +261,9 @@ class Repository implements RepositoryInterface
 
         foreach ($parents ?? [] as $parentClass => $parentPrimaries)
             (new Query($this, $parentClass))
-                ->where($this->getEntityConfig($parentClass)->primaryProp, 'IN', $parentPrimaries)
-                ->get();
+                ->where($this->getEntityConfig($parentClass)->primaryProp,
+                    'IN', array_unique($parentPrimaries)
+                )->get();
 
         return array_map( fn($row) => $this->spawnEntityFromDbRow($entityClass, $row), $rows );
     }
@@ -273,22 +274,18 @@ class Repository implements RepositoryInterface
         $propsColumn = $entityConfig->propsColumn;
 
         $props[$entityConfig->primaryProp] = $row[$entityConfig->getPrimaryColumn()];
-        $props[$propsColumn] = is_string($row[$propsColumn]) ? json_decode($row[$propsColumn]) : $row[$propsColumn];
 
-        foreach ($props[$propsColumn] as $column => $value) {
+        $row[$propsColumn] = is_string($row[$propsColumn]) ? json_decode($row[$propsColumn]) : $row[$propsColumn];
+        foreach ($row[$propsColumn] as $column => $value) {
             $propName = $entityConfig->columns[$column] ?? null; // so the next line fails
             $propConfig = $entityConfig->getPropConfig($propName);
 
+            isset($propConfig->converter) && $converter = new $propConfig->converter($this, $entityClass, $propName);
+
             $props[$propName] = match(true){
-                isset($propConfig->converter) =>
-                    (new $propConfig->converter($this, $entityClass, $propName))->convertForPhp($value),
-
-                // after converter because null may be converted to some other value
-                $value === null => null,
-
-                // after null because the entity might not have this parent
-                $propConfig->parent => $this->get($propConfig->typeClass, $value),
-
+                isset($converter) => $converter->convertForPhp($value),
+                $value === null => null, // after converter because null may be converted to some other value
+                $propConfig->parent => $this->get($propConfig->typeClass, $value), // after null because the entity might not have this parent
                 default => $value,
             };
         }
@@ -312,8 +309,7 @@ class Repository implements RepositoryInterface
         }
 
         $entity = new $entityClass( ...($constructorProps ?? []) );
-        foreach ($props as $prop => $value)
-            $entity->$prop = $value;
+        foreach ($props as $prop => $value) $entity->$prop = $value;
 
         $this->cache[$entityClass][$primaryValue] = $entity;
 
@@ -334,15 +330,12 @@ class Repository implements RepositoryInterface
         $isCreation && $entity->onCreate();
 
         foreach ($entityConfig->getProps() as $prop => $propConfig) {
+            isset($propConfig->converter) && $converter = new $propConfig->converter($this, $class, $prop);
+
             $value = match(true){
-                isset($propConfig->converter) =>
-                    (new $propConfig->converter($this, $class, $prop))->convertForDatabase($entity->$prop),
-
+                isset($converter) => $converter->convertForDatabase($entity->$prop),
                 !isset($entity->$prop) => null,
-
-                $propConfig->parent =>
-                    $entity->$prop->{$this->getEntityConfig($propConfig->typeClass)->primaryProp},
-
+                $propConfig->parent => $entity->$prop->{$this->getEntityConfig($propConfig->typeClass)->primaryProp},
                 default => $entity->$prop,
             };
 
