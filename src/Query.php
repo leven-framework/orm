@@ -67,7 +67,7 @@ final class Query
 
     public function get(): Collection
     {
-        return new Collection($this->class, ...$this->repo->spawnEntitiesFromDbRows($this->class, $this->execute()->rows));
+        return new Collection($this->class, ...$this->repo->generateEntities($this->getEntityConfig(), $this->execute()));
     }
 
     public function getFirst(): Entity
@@ -78,10 +78,7 @@ final class Query
     public function tryFirst(): ?Entity
     {
         $this->dbQuery->limit(1);
-        $rows = $this->execute()->rows;
-        if(!isset($rows[0])) return null;
-
-        return $this->repo->spawnEntityFromDbRow($this->class, $rows[0]);
+        return $this->repo->generateEntities( $this->getEntityConfig(), $this->execute() )[0] ?? null;
     }
 
     // INTERNAL //

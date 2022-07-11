@@ -2,6 +2,7 @@
 
 namespace Leven\ORM;
 
+use Leven\DBA\Common\AdapterResponse;
 use Throwable, DomainException;
 use InvalidArgumentException;
 use Leven\DBA\Common\AdapterInterface;
@@ -59,14 +60,13 @@ class Repository implements RepositoryInterface
         $entityConfig = $this->getEntityConfig($entityClass);
         $primaryColumn = $entityConfig->getPrimaryColumn();
 
-        $rows = $this->db->select($entityConfig->table)
+        $result = $this->db->select($entityConfig->table)
             ->columns($primaryColumn, $entityConfig->propsColumn)
             ->where($primaryColumn, $primaryValue)
             ->limit(1)
-            ->execute()->rows;
+            ->execute();
 
-        if(!isset($rows[0])) return null;
-        return $this->spawnEntityFromDbRow($entityClass, $rows[0]);
+        return $this->generateEntities($entityConfig, $result)[0] ?? null;
     }
 
 
@@ -86,7 +86,7 @@ class Repository implements RepositoryInterface
 
             try {
                 $this->db->update($entityConfig->table)
-                    ->set( $this->generateDbRow($entity) )
+                    ->set( $this->generateRow($entity) )
                     ->where($entityConfig->getPrimaryColumn(), $entity->$primaryProp)
                     ->limit(1)
                     ->execute();
@@ -114,7 +114,7 @@ class Repository implements RepositoryInterface
             $primaryProp = $entityConfig->primaryProp;
 
             try {
-                $row = $this->generateDbRow($entity, true);
+                $row = $this->generateRow($entity, true);
                 $result = $this->db->insert($entityConfig->table, $row);
             }
             catch (Throwable $e) {
@@ -239,88 +239,66 @@ class Repository implements RepositoryInterface
 
     // INTERNAL METHODS
 
-    public function spawnEntityFromDbRow(string $entityClass, array $row): Entity
+    public function generateEntities(EntityConfig $config, AdapterResponse $result): array
     {
-        $props = $this->parsePropsFromDbRow($entityClass, $row);
-        return $this->spawnEntityFromProps($entityClass, $props);
-    }
+        if (!$result->count) return [];
 
-    public function spawnEntitiesFromDbRows(string $entityClass, array $rows): array
-    {
-        $entityConfig = $this->getEntityConfig($entityClass);
+        foreach ($result->rows as $row){
+            $entity[$config->primaryProp] = $row[$config->getPrimaryColumn()];
 
-        foreach($rows as &$row){
-            $row[$entityConfig->propsColumn] = json_decode($row[$entityConfig->propsColumn]);
-            foreach($row[$entityConfig->propsColumn] as $column => $value){
-                $propName = $entityConfig->columns[$column] ?? null; // so the next line fails
-                $propConfig = $entityConfig->getPropConfig($propName);
+            foreach (json_decode($row[$config->propsColumn]) as $column => $value) {
+                $propConfig = $config->getPropConfig($config->columns[$column] ?? null);
 
-                if($propConfig->parent) $parents[$propConfig->typeClass][] = $value;
+                isset($propConfig->converter) &&
+                    $converter = new $propConfig->converter($this, $config->class, $propConfig->name);
+
+                $entity[$propConfig->name] = match(true){
+                    isset($converter) => $converter->convertForPhp($value),
+                    $value === null => null,
+                    $propConfig->parent && $result->count > 1 => $parents[$propConfig->typeClass][] = $value,
+                    $propConfig->parent && $result->count == 1 => $this->get($propConfig->typeClass, $value),
+                    default => $value,
+                };
             }
+
+            $entities[] = $entity;
         }
 
-        foreach ($parents ?? [] as $parentClass => $parentPrimaries)
-            (new Query($this, $parentClass))
-                ->where($this->getEntityConfig($parentClass)->primaryProp,
-                    'IN', array_unique($parentPrimaries)
-                )->get();
+        if (empty($parents)) return array_map( fn($e) => $this->constructFromProps($config, $e), $entities ?? []);
 
-        return array_map( fn($row) => $this->spawnEntityFromDbRow($entityClass, $row), $rows );
+        foreach ($parents as $class => $primaries) (new Query($this, $class))
+            ->where($this->getEntityConfig($class)->primaryProp, 'IN', array_unique($primaries))->get();
+
+        foreach ($config->getProps() as $propConfig)
+            if ($propConfig->parent) foreach ($entities ?? [] as &$entity)
+                $entity[$propConfig->name] = $this->get($propConfig->typeClass, $entity[$propConfig->name]);
+
+        return array_map( fn($e) => $this->constructFromProps($config, $e), $entities ?? [] );
     }
 
-    protected function parsePropsFromDbRow(string $entityClass, array $row): array
+    protected function constructFromProps(EntityConfig $config, array $props): Entity
     {
-        $entityConfig = $this->getEntityConfig($entityClass);
-        $propsColumn = $entityConfig->propsColumn;
+        $primary = $props[$config->primaryProp];
 
-        $props[$entityConfig->primaryProp] = $row[$entityConfig->getPrimaryColumn()];
+        if (isset($this->cache[$config->class][$primary]))
+            return $this->cache[$config->class][$primary];
 
-        $row[$propsColumn] = is_string($row[$propsColumn]) ? json_decode($row[$propsColumn]) : $row[$propsColumn];
-        foreach ($row[$propsColumn] as $column => $value) {
-            $propName = $entityConfig->columns[$column] ?? null; // so the next line fails
-            $propConfig = $entityConfig->getPropConfig($propName);
-
-            isset($propConfig->converter) && $converter = new $propConfig->converter($this, $entityClass, $propName);
-
-            $props[$propName] = match(true){
-                isset($converter) => $converter->convertForPhp($value),
-                $value === null => null, // after converter because null may be converted to some other value
-                $propConfig->parent => $this->get($propConfig->typeClass, $value), // after null because the entity might not have this parent
-                default => $value,
-            };
-        }
-
-        return $props;
-    }
-
-
-    protected function spawnEntityFromProps(string $entityClass, array $props): Entity
-    {
-        $entityConfig = $this->getEntityConfig($entityClass);
-        $primaryValue = $props[$entityConfig->primaryProp];
-
-        if (isset($this->cache[$entityClass][$primaryValue]))
-            return $this->cache[$entityClass][$primaryValue];
-
-        foreach ($entityConfig->constructorProps as $propName) {
+        foreach ($config->constructorProps as $propName) {
             // if for whatever reason constructor prop isn't in database, assume it's nullable
             $constructorProps[$propName] = $props[$propName] ?? null;
             unset($props[$propName]);
         }
 
-        $entity = new $entityClass( ...($constructorProps ?? []) );
+        $entity = new $config->class( ...($constructorProps ?? []) );
         foreach ($props as $prop => $value) $entity->$prop = $value;
 
-        $this->cache[$entityClass][$primaryValue] = $entity;
-
-        return $entity;
+        return $this->cache[$config->class][$primary] = $entity;
     }
-
 
     /**
      * @throws PropertyValidationException
      */
-    protected function generateDbRow(Entity $entity, $isCreation = false): array
+    protected function generateRow(Entity $entity, $isCreation = false): array
     {
         $class = get_class($entity);
         $entityConfig = $this->getEntityConfig($class);
